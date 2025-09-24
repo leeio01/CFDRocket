@@ -17,7 +17,7 @@ bot.use((ctx, next) => {
 
 bot.start((ctx) => {
   const welcomeMessage = `
-👋 Welcome to FDROCKET Earning Bot!
+👋 Welcome to CFDROCKET Earning Bot!
 
 This bot is for demo/testing purposes only.
 You can:
