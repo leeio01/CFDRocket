@@ -1,12 +1,16 @@
-// board/board.js
-
 require('dotenv').config();
 const { Telegraf } = require('telegraf');
 const axios = require('axios');
+const { SocksProxyAgent } = require('socks-proxy-agent');
 
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 const API = process.env.API_URL || 'http://localhost:4000';
 const ADMIN_ID = parseInt(process.env.ADMIN_CHAT_ID);
+const proxy = process.env.PROXY;
+const agent = new SocksProxyAgent(proxy);
+
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {
+  telegram: { agent }
+});
 
 // Middleware to restrict access to admin
 bot.use((ctx, next) => {
@@ -41,7 +45,6 @@ Commands:
 /settoken <token> - Link your demo API token
 /trade_sim_start_with_token <token> - Start trading simulation
 `;
-
   ctx.reply(welcomeMessage);
 });
 
@@ -122,4 +125,4 @@ bot.command('setgrowth', (ctx) => {
 });
 
 // Launch the bot
-bot.launch().then(() => console.log('Telegram bot started'));
+bot.launch().then(() => console.log('Telegram bot started with proxy'));
