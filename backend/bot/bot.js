@@ -1,16 +1,11 @@
 require('dotenv').config();
 const { Telegraf } = require('telegraf');
 const axios = require('axios');
-const { SocksProxyAgent } = require('socks-proxy-agent');
 
 const API = process.env.API_URL || 'http://localhost:4000';
 const ADMIN_ID = parseInt(process.env.ADMIN_CHAT_ID);
-const proxy = process.env.PROXY;
-const agent = new SocksProxyAgent(proxy);
 
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {
-  telegram: { agent }
-});
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
 // Middleware to restrict access to admin
 bot.use((ctx, next) => {
@@ -125,4 +120,4 @@ bot.command('setgrowth', (ctx) => {
 });
 
 // Launch the bot
-bot.launch().then(() => console.log('Telegram bot started with proxy'));
+bot.launch().then(() => console.log('Telegram bot started (no proxy)'));
