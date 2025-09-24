@@ -41,6 +41,19 @@ Commands:
 /trade_sim_start_with_token <token> - Start trading simulation
 `;
   ctx.reply(welcomeMessage);
+
+  // Send the inline keyboard
+  const keyboard = {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "Start Simulation ▶️", callback_data: "start" }],
+        [{ text: "Pause Simulation ⏸", callback_data: "pause" }],
+        [{ text: "Stop Simulation ⏹", callback_data: "stop" }],
+        [{ text: "Set Growth Rate 📈", callback_data: "growth" }],
+      ],
+    },
+  };
+  ctx.reply("Select an action:", keyboard);
 });
 
 // Command: set API token
@@ -117,6 +130,26 @@ bot.command('stopsimulation', (ctx) => {
 
 bot.command('setgrowth', (ctx) => {
   ctx.reply('Set growth rate feature will call backend API (demo).');
+});
+
+// Handle button clicks
+bot.on('callback_query', async (ctx) => {
+  const data = ctx.callbackQuery.data;
+  const chatId = ctx.callbackQuery.message.chat.id;
+
+  // Example placeholder functions
+  const startSimulationFunction = async () => ctx.reply('▶️ Simulation started (callback)');
+  const pauseSimulationFunction = async () => ctx.reply('⏸ Simulation paused (callback)');
+  const stopSimulationFunction = async () => ctx.reply('⏹ Simulation stopped (callback)');
+  const askGrowthRate = async (chatId) => ctx.reply('📈 Please send the new growth rate value.');
+
+  if (data === 'start') await startSimulationFunction();
+  if (data === 'pause') await pauseSimulationFunction();
+  if (data === 'stop') await stopSimulationFunction();
+  if (data === 'growth') await askGrowthRate(chatId);
+
+  // Acknowledge the callback to remove "loading" state on the button
+  await ctx.answerCbQuery();
 });
 
 // Launch the bot
