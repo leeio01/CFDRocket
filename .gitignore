@@ -2,33 +2,17 @@
 /frontend/node_modules/
 /backend/node_modules/
 
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+# Environment files
+/frontend/.env
+/backend/.env
 
 # Build outputs
 /frontend/dist/
-frontend/build/
+/frontend/build/
+
+# Logs
+*.log
 
 # OS files
 .DS_Store
 Thumbs.db
-
-# Env files
-frontend/.env
-backend/.env
-
-# IDEs
-.vscode/
-.idea/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Optional: coverage reports
-coverage/
