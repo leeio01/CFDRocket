@@ -5,12 +5,16 @@ import { useNavigate } from 'react-router-dom';
 export default function Dashboard() {
   const navigate = useNavigate();
   const [balances, setBalances] = useState([]);
-  const [balance, setBalance] = useState(0); // total demo balance
-  const [growthRate, setGrowthRate] = useState(2.83); // default value
+  const [balance, setBalance] = useState(0);
+  const [growthRate, setGrowthRate] = useState(2.83);
   const token = localStorage.getItem('token');
 
   useEffect(() => {
-    if (!token) return navigate('/');
+    if (!token) {
+      navigate('/');   // 👈 just navigate
+      return;          // stop running effect
+    }
+
     setAuthToken(token);
 
     const fetchBalance = async () => {
@@ -18,7 +22,6 @@ export default function Dashboard() {
         const res = await api.get('/api/balance');
         setBalances(res.data);
 
-        // Calculate total demo balance
         const total = res.data.reduce((acc, b) => acc + b.amount, 0);
         setBalance(total);
       } catch (err) {
@@ -27,11 +30,10 @@ export default function Dashboard() {
     };
 
     fetchBalance();
-    const interval = setInterval(fetchBalance, 5000); // poll every 5 sec
+    const interval = setInterval(fetchBalance, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [token, navigate]); // 👈 added dependencies
 
-  // Simulation control functions
   async function startSimulation() {
     try {
       await api.post('/api/simulation/start');
@@ -75,18 +77,14 @@ export default function Dashboard() {
   return (
     <div>
       <h2>Dashboard</h2>
-
-      {/* Demo balance */}
       <h2>Demo Balance: {balance.toFixed(2)} USD</h2>
 
-      {/* Simulation control buttons */}
       <div style={{ marginBottom: '20px' }}>
         <button onClick={startSimulation}>Start</button>
         <button onClick={pauseSimulation} style={{ marginLeft: '10px' }}>Pause</button>
         <button onClick={stopSimulation} style={{ marginLeft: '10px' }}>Stop</button>
       </div>
 
-      {/* Growth rate input */}
       <div style={{ marginBottom: '20px' }}>
         <label>
           Set Demo Growth Rate (% per day):
@@ -105,7 +103,6 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* Individual balances */}
       <h3>Balances</h3>
       <ul>
         {balances.map((b) => (
