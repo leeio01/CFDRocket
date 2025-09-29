@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { FiEye, FiEyeOff } from "react-icons/fi";
+import { FiEye, FiEyeOff } from "react-icons/fi"; // import eye icons
 import api, { setAuthToken } from "../services/api";
 import { useNavigate } from "react-router-dom";
 
@@ -14,9 +14,7 @@ export default function Login() {
     try {
       const res = await api.post("/api/auth/login", { email, password });
       const { token } = res.data;
-
-      // store token in sessionStorage only
-      sessionStorage.setItem("token", token);
+      localStorage.setItem("token", token);
       setAuthToken(token);
       navigate("/dashboard");
     } catch (err) {
@@ -28,7 +26,7 @@ export default function Login() {
     <div style={styles.wrapper}>
       <form onSubmit={onSubmit} style={styles.form}>
         <h2 style={styles.title}>Welcome Back</h2>
-        <p style={styles.subtitle}>Sign in to continue to CFDROCKET</p>
+        <p style={styles.subtitle}>Sign in to continue with CFDROCKET</p>
 
         <input
           style={styles.input}
