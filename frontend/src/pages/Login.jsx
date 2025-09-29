@@ -1,10 +1,12 @@
 import React, { useState } from "react";
+import { FiEye, FiEyeOff } from "react-icons/fi";
 import api, { setAuthToken } from "../services/api";
 import { useNavigate } from "react-router-dom";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
   const onSubmit = async (e) => {
@@ -12,7 +14,9 @@ export default function Login() {
     try {
       const res = await api.post("/api/auth/login", { email, password });
       const { token } = res.data;
-      localStorage.setItem("token", token);
+
+      // store token in sessionStorage only
+      sessionStorage.setItem("token", token);
       setAuthToken(token);
       navigate("/dashboard");
     } catch (err) {
@@ -24,7 +28,8 @@ export default function Login() {
     <div style={styles.wrapper}>
       <form onSubmit={onSubmit} style={styles.form}>
         <h2 style={styles.title}>Welcome Back</h2>
-        <p style={styles.subtitle}>Sign in to continue to with CFDROCKET</p>
+        <p style={styles.subtitle}>Sign in to continue to CFDROCKET</p>
+
         <input
           style={styles.input}
           value={email}
@@ -32,14 +37,24 @@ export default function Login() {
           placeholder="Email"
           required
         />
-        <input
-          style={styles.input}
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password"
-          required
-        />
+
+        <div style={styles.passwordWrapper}>
+          <input
+            style={{ ...styles.input, paddingRight: "40px" }}
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            required
+          />
+          <span
+            style={styles.eye}
+            onClick={() => setShowPassword(!showPassword)}
+          >
+            {showPassword ? <FiEyeOff /> : <FiEye />}
+          </span>
+        </div>
+
         <button type="submit" style={styles.button}>
           Login
         </button>
@@ -56,7 +71,7 @@ const styles = {
     minHeight: "80vh",
   },
   form: {
-    background: "#1f2937", // solid dark gray (modern)
+    background: "#1f2937",
     padding: "40px",
     borderRadius: "12px",
     boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
@@ -86,11 +101,23 @@ const styles = {
     fontSize: "15px",
     outline: "none",
   },
+  passwordWrapper: {
+    position: "relative",
+  },
+  eye: {
+    position: "absolute",
+    right: "12px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    cursor: "pointer",
+    fontSize: "20px",
+    color: "#9ca3af",
+  },
   button: {
     marginTop: "20px",
     width: "100%",
     padding: "12px",
-    background: "linear-gradient(135deg, #2563eb, #7e22ce)", // blue → purple
+    background: "linear-gradient(135deg, #2563eb, #7e22ce)",
     color: "white",
     fontSize: "16px",
     fontWeight: "600",

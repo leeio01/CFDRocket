@@ -273,3 +273,26 @@ ul li:hover {
     margin-right: 6px;
   }
 }
+.remember-wrapper {
+  display: flex;
+  align-items: center;      /* vertically centers items */
+  gap: 8px;                 /* space between checkbox and label */
+  margin-bottom: 16px;
+}
+
+.remember-wrapper input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  margin: 0;                /* reset default margins */
+  vertical-align: middle;   /* align with text */
+}
+
+.remember-wrapper label {
+  font-size: 14px;
+  color: #f9fafb;
+  cursor: pointer;
+  line-height: 1.2;         /* match checkbox height */
+  display: flex;
+  align-items: center;      /* align text vertically with checkbox */
+}
