@@ -10,12 +10,13 @@ export default function Dashboard() {
   const token = localStorage.getItem('token');
 
   useEffect(() => {
-    if (!token) {
-      navigate('/');   // 👈 just navigate
-      return;          // stop running effect
-    }
+    // 🔥 TEMPORARY: disable redirect so you can test Dashboard
+    // if (!token) {
+    //   navigate('/');
+    //   return;
+    // }
 
-    setAuthToken(token);
+    if (token) setAuthToken(token);
 
     const fetchBalance = async () => {
       try {
@@ -32,7 +33,7 @@ export default function Dashboard() {
     fetchBalance();
     const interval = setInterval(fetchBalance, 5000);
     return () => clearInterval(interval);
-  }, [token, navigate]); // 👈 added dependencies
+  }, [token, navigate]);
 
   async function startSimulation() {
     try {
@@ -81,8 +82,12 @@ export default function Dashboard() {
 
       <div style={{ marginBottom: '20px' }}>
         <button onClick={startSimulation}>Start</button>
-        <button onClick={pauseSimulation} style={{ marginLeft: '10px' }}>Pause</button>
-        <button onClick={stopSimulation} style={{ marginLeft: '10px' }}>Stop</button>
+        <button onClick={pauseSimulation} style={{ marginLeft: '10px' }}>
+          Pause
+        </button>
+        <button onClick={stopSimulation} style={{ marginLeft: '10px' }}>
+          Stop
+        </button>
       </div>
 
       <div style={{ marginBottom: '20px' }}>

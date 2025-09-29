@@ -16,21 +16,23 @@ import Transactions from "./pages/Transactions";
 import "./index.css";
 
 createRoot(document.getElementById("root")).render(
-  <BrowserRouter>
-    <Routes>
-      <Route path="/" element={<App />}>
-        {/* Default route → Login */}
-        <Route index element={<Login />} />
+  <React.StrictMode>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<App />}>
+          {/* Default route → Login */}
+          <Route index element={<Login />} />
 
-        {/* Main Pages */}
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="convert" element={<Convert />} />
-        <Route path="deposit" element={<Deposit />} />
-        <Route path="withdraw" element={<Withdraw />} />
-        <Route path="wallets" element={<Wallets />} />
-        <Route path="kyc" element={<KYC />} />
-        <Route path="transactions" element={<Transactions />} />
-      </Route>
-    </Routes>
-  </BrowserRouter>
+          {/* Main Pages */}
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="convert" element={<Convert />} />
+          <Route path="deposit" element={<Deposit />} />
+          <Route path="withdraw" element={<Withdraw />} />
+          <Route path="wallets" element={<Wallets />} />
+          <Route path="kyc" element={<KYC />} />
+          <Route path="transactions" element={<Transactions />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  </React.StrictMode>
 );
