@@ -1,331 +1,275 @@
-/* Reset defaults */
-html, body {
+/* =======================
+   Global Reset & Base
+======================= */
+* {
+  box-sizing: border-box;
   margin: 0;
   padding: 0;
-  height: 100%;
 }
 
-#root, .app-container {
-  min-height: 100vh;
+body, html {
   font-family: "Inter", system-ui, sans-serif;
+  background: linear-gradient(135deg, #1e3a8a, #7e22ce, #db2777); /* your gradient */
+  color: #f9fafb;
+  min-height: 100%;
+}
+
+a { text-decoration: none; color: inherit; }
+ul { list-style: none; padding-left: 0; }
+
+/* =======================
+   App Container
+======================= */
+.app-container {
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, #1e3a8a, #7e22ce, #db2777);
-  color: #f9fafb;
+  min-height: 100vh;
 }
 
-/* Navbar */
+/* =======================
+   Navbar
+======================= */
 header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 40px;
-  background: rgba(0, 0, 0, 0.25); /* glass effect */
+  padding: 16px 32px;
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  background: rgba(0,0,0,0.25);
+  border-bottom: 1px solid rgba(255,255,255,0.15);
   position: sticky;
   top: 0;
   z-index: 100;
 }
 
-/* Logo / App Name */
 header h1 {
-  font-size: 1.8rem;
-  font-weight: 800;
-  letter-spacing: -1px;
-  background: linear-gradient(90deg, #7F00FF, #E100FF);
+  font-size: 1.6rem;
+  font-weight: 700;
+  background: linear-gradient(90deg,#7F00FF,#E100FF);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  cursor: default;
   user-select: none;
 }
 
-/* Nav Links */
 .nav-links {
   display: flex;
-  gap: 32px;
+  gap: 24px;
 }
 
 .nav-links a {
-  text-decoration: none;
-  color: #f9fafb;
   font-weight: 600;
   position: relative;
   padding: 4px 0;
-  transition: all 0.3s ease;
 }
 
 .nav-links a::after {
-  content: "";
+  content: '';
   position: absolute;
   width: 0;
   height: 2px;
-  left: 0;
   bottom: -4px;
-  background: linear-gradient(90deg, #7F00FF, #E100FF);
+  left: 0;
+  background: linear-gradient(90deg,#7F00FF,#E100FF);
   transition: width 0.3s ease;
 }
 
-.nav-links a:hover::after {
-  width: 100%;
-}
-
-.nav-links a.active {
-  color: #facc15;
-}
-
+.nav-links a:hover::after,
 .nav-links a.active::after {
   width: 100%;
 }
 
-/* Main Content */
-main {
-  flex: 1;
-  padding: 40px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-/* Card style for sections */
-.card {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 32px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-  margin-bottom: 24px;
-  color: #f9fafb;
-  backdrop-filter: blur(12px);
-}
-
-/* Footer */
+/* =======================
+   Footer
+======================= */
 footer {
-  background: transparent;
   text-align: center;
   padding: 16px;
   font-size: 14px;
   color: #e5e7eb;
-  border-top: 1px solid rgba(255,255,255,0.15);
+  margin-top: auto;
 }
-/* Convert page styles */
-.convert-container {
-  max-width: 500px;
-  margin: 0 auto;
-  padding: 32px;
-  background: rgba(255, 255, 255, 0.05);
+
+/* =======================
+   Page Wrapper & Cards
+======================= */
+.page-wrapper {
+  max-width: 900px;
+  margin: 40px auto;
+  padding: 24px;
+}
+
+.card {
+  background: rgba(255,255,255,0.05);
   border-radius: 16px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-  backdrop-filter: blur(12px);
-}
-
-.convert-title {
-  text-align: center;
-  font-size: 28px;
+  padding: 32px;
   margin-bottom: 24px;
-  color: #facc15; /* bright color */
-  letter-spacing: 1px;
-}
-
-.convert-row {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 16px;
-}
-
-.convert-row label {
-  font-weight: 600;
-  margin-bottom: 6px;
-  color: #f3f4f6;
-}
-
-.convert-row input,
-.convert-row select {
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: none;
-  outline: none;
-  background: rgba(255,255,255,0.1);
-  color: #f9fafb;
-  font-size: 16px;
-}
-
-.convert-row input::placeholder {
-  color: #d1d5db;
-}
-
-.convert-btn {
-  width: 100%;
-  padding: 12px 0;
-  background: linear-gradient(90deg, #7e22ce, #db2777);
-  color: white;
-  font-weight: 700;
-  font-size: 16px;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
   transition: all 0.3s ease;
 }
 
-.convert-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(219,39,119,0.5);
+.card:hover {
+  box-shadow: 0 12px 36px rgba(0,0,0,0.4);
 }
 
-.convert-result {
-  margin-top: 24px;
-  padding: 16px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 12px;
-  text-align: center;
-  color: #f9fafb;
-  font-weight: 600;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-}
-/* Deposit page styles */
-.deposit-container {
-  max-width: 500px;
-  margin: 0 auto;
-  padding: 32px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-  backdrop-filter: blur(12px);
-}
-
-.deposit-title {
-  text-align: center;
-  font-size: 28px;
-  margin-bottom: 24px;
-  color: #facc15;
-  letter-spacing: 1px;
-}
-
-.deposit-row {
-  display: flex;
-  flex-direction: column;
-  margin-bottom: 16px;
-}
-
-.deposit-row label {
-  font-weight: 600;
-  margin-bottom: 6px;
-  color: #f3f4f6;
-}
-
-.deposit-row input,
-.deposit-row select {
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: none;
-  outline: none;
-  background: rgba(255,255,255,0.1);
-  color: #f9fafb;
-  font-size: 16px;
-}
-
-.deposit-row input::placeholder {
-  color: #d1d5db;
-}
-
-.deposit-btn {
+/* =======================
+   Forms
+======================= */
+input, select {
   width: 100%;
-  padding: 12px 0;
-  background: linear-gradient(90deg, #7e22ce, #db2777);
-  color: white;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.2);
+  outline: none;
+  font-size: 15px;
+  margin-bottom: 16px;
+  background: rgba(255,255,255,0.05);
+  color: #f9fafb;
+  transition: border 0.2s ease, background 0.2s ease;
+}
+
+input:focus, select:focus {
+  border-color: #7F00FF;
+  background: rgba(255,255,255,0.1);
+}
+
+button {
+  width: 100%;
+  padding: 12px;
   font-weight: 700;
   font-size: 16px;
-  border: none;
   border-radius: 12px;
+  border: none;
   cursor: pointer;
+  background: linear-gradient(135deg,#6b5bff,#db2777);
+  color: #fff;
   transition: all 0.3s ease;
 }
 
-.deposit-btn:hover {
+button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(219,39,119,0.5);
+  box-shadow: 0 6px 20px rgba(107,91,255,0.5);
 }
 
-.deposit-message {
-  margin-top: 20px;
-  padding: 16px;
+/* =======================
+   Lists / Table items
+======================= */
+ul li {
+  padding: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  transition: background 0.2s ease;
+}
+
+ul li:hover {
   background: rgba(255,255,255,0.1);
-  border-radius: 12px;
-  text-align: center;
-  color: #f9fafb;
-  font-weight: 600;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 }
-/* Withdraw page styles */
-.withdraw-container {
-  max-width: 500px;
-  margin: 0 auto;
-  padding: 32px;
-  background: rgba(255, 255, 255, 0.05);
+
+/* =======================
+   Page Specific Styles
+======================= */
+
+/* Login / Register */
+.auth-card {
+  max-width: 400px;
+  margin: 40px auto;
+  padding: 24px;
+  background: rgba(255,255,255,0.05);
   border-radius: 16px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
   backdrop-filter: blur(12px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
 }
 
-.withdraw-title {
-  text-align: center;
-  font-size: 28px;
-  margin-bottom: 24px;
-  color: #facc15;
-  letter-spacing: 1px;
-}
-
-.withdraw-row {
+/* Dashboard */
+.dashboard-wrapper {
+  max-width: 1000px; 
+  margin: 40px auto;
+  padding: 16px 24px;
   display: flex;
   flex-direction: column;
-  margin-bottom: 16px;
+  gap: 24px;
 }
 
-.withdraw-row label {
-  font-weight: 600;
-  margin-bottom: 6px;
-  color: #f3f4f6;
-}
-
-.withdraw-row input,
-.withdraw-row select {
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: none;
-  outline: none;
-  background: rgba(255,255,255,0.1);
-  color: #f9fafb;
-  font-size: 16px;
-}
-
-.withdraw-row input::placeholder {
-  color: #d1d5db;
-}
-
-.withdraw-btn {
-  width: 100%;
-  padding: 12px 0;
-  background: linear-gradient(90deg, #7e22ce, #db2777);
-  color: white;
-  font-weight: 700;
-  font-size: 16px;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
+.dashboard-card {
+  background: rgba(255,255,255,0.05);
+  border-radius: 16px;
+  padding: 24px; 
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
   transition: all 0.3s ease;
 }
 
-.withdraw-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(219,39,119,0.5);
+.dashboard-card:hover {
+  box-shadow: 0 12px 36px rgba(0,0,0,0.4);
 }
 
-.withdraw-message {
-  margin-top: 20px;
-  padding: 16px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 12px;
+.dashboard-balance {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 20px;
+}
+
+/* Reduce Start/Pause/Stop buttons size */
+.dashboard-card button {
+  width: auto;
+  padding: 8px 16px;
+  font-size: 14px;
+  margin-right: 8px;
+}
+
+/* Convert / Deposit / Withdraw */
+.form-section {
+  max-width: 500px;
+  margin: auto;
+}
+
+.form-section h2 {
+  font-size: 26px;
+  font-weight: 700;
+  margin-bottom: 24px;
   text-align: center;
-  color: #f9fafb;
-  font-weight: 600;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  color: #db2777;
+}
+
+/* Accent Buttons */
+.btn-accent {
+  background: linear-gradient(135deg,#6b5bff,#db2777);
+}
+
+.btn-accent:hover {
+  background: linear-gradient(135deg,#5948c2,#be185d);
+  transform: translateY(-2px);
+}
+
+/* =======================
+   Responsive
+======================= */
+@media (max-width: 1200px) {
+  .dashboard-wrapper {
+    margin: 20px auto;
+    padding: 16px;
+  }
+
+  .dashboard-card {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  header { flex-direction: column; gap: 12px; }
+  .nav-links { gap: 16px; }
+  .page-wrapper { margin: 20px auto; padding: 16px; }
+  
+  .dashboard-wrapper {
+    padding: 12px;
+  }
+
+  .dashboard-card {
+    padding: 12px;
+  }
+
+  .dashboard-card button {
+    font-size: 12px;
+    padding: 6px 12px;
+    margin-right: 6px;
+  }
 }

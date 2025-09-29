@@ -10,11 +10,10 @@ export default function Dashboard() {
   const token = localStorage.getItem('token');
 
   useEffect(() => {
-    // 🔥 TEMPORARY: disable redirect so you can test Dashboard
-    // if (!token) {
-    //   navigate('/');
-    //   return;
-    // }
+    if (!token) {
+      navigate('/');
+      return;
+    }
 
     if (token) setAuthToken(token);
 
@@ -76,23 +75,22 @@ export default function Dashboard() {
   }
 
   return (
-    <div>
-      <h2>Dashboard</h2>
-      <h2>Demo Balance: {balance.toFixed(2)} USD</h2>
-
-      <div style={{ marginBottom: '20px' }}>
-        <button onClick={startSimulation}>Start</button>
-        <button onClick={pauseSimulation} style={{ marginLeft: '10px' }}>
-          Pause
-        </button>
-        <button onClick={stopSimulation} style={{ marginLeft: '10px' }}>
-          Stop
-        </button>
+    <div className="dashboard-wrapper">
+      {/* Total Balance Card */}
+      <div className="dashboard-card">
+        <h2 className="dashboard-balance">Demo Balance: {balance.toFixed(2)} USD</h2>
       </div>
 
-      <div style={{ marginBottom: '20px' }}>
-        <label>
-          Set Demo Growth Rate (% per day):
+      {/* Simulation Controls Card */}
+      <div className="dashboard-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button onClick={startSimulation}>Start</button>
+          <button onClick={pauseSimulation}>Pause</button>
+          <button onClick={stopSimulation}>Stop</button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <label>Set Demo Growth Rate (% per day):</label>
           <input
             type="number"
             min="2.83"
@@ -100,22 +98,23 @@ export default function Dashboard() {
             step="0.01"
             value={growthRate}
             onChange={(e) => setGrowthRate(parseFloat(e.target.value))}
-            style={{ marginLeft: '10px', width: '80px' }}
+            style={{ width: '80px' }}
           />
-        </label>
-        <button onClick={handleSetGrowthRate} style={{ marginLeft: '10px' }}>
-          Set Growth Rate
-        </button>
+          <button onClick={handleSetGrowthRate}>Set Growth Rate</button>
+        </div>
       </div>
 
-      <h3>Balances</h3>
-      <ul>
-        {balances.map((b) => (
-          <li key={b._id}>
-            {b.asset}: {b.amount}
-          </li>
-        ))}
-      </ul>
+      {/* Balances Card */}
+      <div className="dashboard-card">
+        <h3>Balances</h3>
+        <ul>
+          {balances.map((b) => (
+            <li key={b._id}>
+              {b.asset}: {b.amount.toFixed(2)}
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
