@@ -1,39 +1,73 @@
 const TelegramBot = require("node-telegram-bot-api");
-const axios = require("axios");
+const mongoose = require("mongoose");
 require("dotenv").config();
 
-// ENV Vars
+// ================== ENV Vars ==================
 const BOT_TOKEN = process.env.USER_BOT_TOKEN;
-const API_BASE = process.env.API_URL; // ✅ use correct env var
+const MONGO_URI = process.env.MONGO_URI;
 
 console.log("🚀 User Bot starting...");
-console.log("API Base:", API_BASE);
 console.log("Token:", BOT_TOKEN ? "Loaded" : "Missing");
+console.log("MongoDB:", MONGO_URI ? "Loaded" : "Missing");
 
-// Create Bot
-const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+// ================== DB MODELS ==================
+mongoose
+  .connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => console.error("❌ MongoDB Error:", err.message));
 
-// Debug polling errors
-bot.on("polling_error", (err) => console.error("Polling error:", err.message));
-
-// Simple heartbeat
-bot.on("message", (msg) => {
-  console.log("📩 Received:", msg.text);
+const userSchema = new mongoose.Schema({
+  chatId: { type: String, required: true, unique: true },
+  name: String,
+  phone: String,
+  city: String,
+  country: String,
+  age: String,
+  balance: { type: Number, default: 0 },
+  wallets: {
+    BTC: String,
+    ETH: String,
+    USDT: String,
+  },
+  transactions: [
+    {
+      type: String,
+      amount: Number,
+      status: String,
+      date: { type: Date, default: Date.now },
+    },
+  ],
 });
 
-// Start
+const User = mongoose.model("User", userSchema);
+
+// ================== BOT INIT ==================
+const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+
+bot.on("polling_error", (err) =>
+  console.error("Polling error:", err.message)
+);
+
+// ================== START ==================
 bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
 
-  await bot.sendMessage(
-    chatId,
-    `👋 Welcome to CFDROCKET Earning Bot Demo!\n\nThis is for testing only. Let's begin with KYC.`
-  );
-
-  askKYC(chatId);
+  let user = await User.findOne({ chatId });
+  if (!user) {
+    user = new User({ chatId });
+    await user.save();
+    bot.sendMessage(
+      chatId,
+      "👋 Welcome to CFDROCKET Earning Bot!\n\nPlease complete your KYC."
+    );
+    askKYC(chatId);
+  } else {
+    bot.sendMessage(chatId, "👋 Welcome back!");
+    showMainMenu(chatId);
+  }
 });
 
-// ----------------- KYC FLOW -----------------
+// ================== KYC FLOW ==================
 async function askKYC(chatId) {
   bot.sendMessage(chatId, "Please enter your Full Name:");
   bot.once("message", async (nameMsg) => {
@@ -55,27 +89,17 @@ async function askKYC(chatId) {
           bot.once("message", async (ageMsg) => {
             const age = ageMsg.text;
 
-            // Save to backend
-            try {
-              await axios.post(`${API_BASE}/kyc`, {
-                chatId,
-                name,
-                phone,
-                city,
-                country,
-                age,
-              });
+            await User.findOneAndUpdate(
+              { chatId },
+              { name, phone, city, country, age },
+              { new: true }
+            );
 
-              bot.sendMessage(
-                chatId,
-                `✅ KYC Completed!\n\nWelcome, ${name}. Use the menu below.`
-              );
-
-              showMainMenu(chatId);
-            } catch (err) {
-              console.error("❌ KYC Error:", err.message);
-              bot.sendMessage(chatId, "❌ Error saving KYC. Try again.");
-            }
+            bot.sendMessage(
+              chatId,
+              `✅ KYC Completed!\n\nWelcome, ${name}.`
+            );
+            showMainMenu(chatId);
           });
         });
       });
@@ -83,7 +107,7 @@ async function askKYC(chatId) {
   });
 }
 
-// ----------------- MAIN MENU -----------------
+// ================== MAIN MENU ==================
 function showMainMenu(chatId) {
   bot.sendMessage(chatId, "📍 Main Menu", {
     reply_markup: {
@@ -98,80 +122,87 @@ function showMainMenu(chatId) {
   });
 }
 
-// ----------------- MENU ACTIONS -----------------
+// ================== MENU ACTIONS ==================
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text;
+  let user = await User.findOne({ chatId });
 
+  if (!user) {
+    bot.sendMessage(chatId, "❌ Please run /start first.");
+    return;
+  }
+
+  // Deposit Wallets
   if (text === "💰 Deposit Wallets") {
-    try {
-      const res = await axios.get(`${API_BASE}/wallets?chatId=${chatId}`);
-      const wallets = res.data; // {BTC:"...", ETH:"..."}
+    let wallets = user.wallets;
 
-      let reply = "💰 Your Deposit Wallets (Demo):\n\n";
-      for (const [coin, address] of Object.entries(wallets)) {
-        reply += `${coin}: \`${address}\`\n`;
-      }
-
-      bot.sendMessage(chatId, reply, { parse_mode: "Markdown" });
-    } catch (err) {
-      console.error("❌ Wallets Error:", err.message);
-      bot.sendMessage(chatId, "❌ Could not fetch wallets.");
+    if (!wallets.BTC) {
+      wallets = {
+        BTC: "btc_demo_wallet_" + chatId,
+        ETH: "eth_demo_wallet_" + chatId,
+        USDT: "usdt_demo_wallet_" + chatId,
+      };
+      user.wallets = wallets;
+      await user.save();
     }
+
+    let reply = "💰 Your Deposit Wallets:\n\n";
+    for (const [coin, address] of Object.entries(wallets)) {
+      reply += `${coin}: \`${address}\`\n`;
+    }
+
+    bot.sendMessage(chatId, reply, { parse_mode: "Markdown" });
   }
 
+  // My Balance
   if (text === "📈 My Balance") {
-    try {
-      const res = await axios.get(`${API_BASE}/balance?chatId=${chatId}`);
-      bot.sendMessage(
-        chatId,
-        `📈 Demo Balance: ${res.data.balance} USDT (simulated)`
-      );
-    } catch (err) {
-      console.error("❌ Balance Error:", err.message);
-      bot.sendMessage(chatId, "❌ Could not fetch balance.");
-    }
+    bot.sendMessage(chatId, `📈 Balance: ${user.balance} USDT`);
   }
 
+  // Transactions
   if (text === "📜 Transactions") {
-    try {
-      const res = await axios.get(`${API_BASE}/transactions?chatId=${chatId}`);
-      let reply = "📜 Your Demo Transactions:\n\n";
-
-      res.data.forEach((tx) => {
-        reply += `${tx.type} - ${tx.amount} USDT - ${tx.status}\n`;
+    if (!user.transactions.length) {
+      bot.sendMessage(chatId, "No transactions yet.");
+    } else {
+      let reply = "📜 Your Transactions:\n\n";
+      user.transactions.forEach((tx) => {
+        reply += `${tx.type} - ${tx.amount} USDT - ${tx.status} (${tx.date.toLocaleString()})\n`;
       });
-
-      bot.sendMessage(chatId, reply || "No transactions yet.");
-    } catch (err) {
-      console.error("❌ Transactions Error:", err.message);
-      bot.sendMessage(chatId, "❌ Could not fetch transactions.");
+      bot.sendMessage(chatId, reply);
     }
   }
 
+  // Withdraw
   if (text === "💸 Withdraw") {
     bot.sendMessage(chatId, "Enter amount to withdraw:");
     bot.once("message", async (amtMsg) => {
-      const amount = amtMsg.text;
+      const amount = Number(amtMsg.text);
 
-      try {
-        await axios.post(`${API_BASE}/withdraw`, { chatId, amount });
-
-        bot.sendMessage(
-          chatId,
-          "💸 Withdrawal Requested (Demo). Processing... up to 30 mins."
-        );
-      } catch (err) {
-        console.error("❌ Withdraw Error:", err.message);
-        bot.sendMessage(chatId, "❌ Error requesting withdrawal.");
+      if (isNaN(amount) || amount <= 0) {
+        bot.sendMessage(chatId, "❌ Invalid amount.");
+        return;
       }
+
+      user.transactions.push({
+        type: "Withdraw",
+        amount,
+        status: "Pending",
+      });
+      await user.save();
+
+      bot.sendMessage(
+        chatId,
+        `💸 Withdrawal of ${amount} USDT requested. Processing...`
+      );
     });
   }
 
+  // Support
   if (text === "📞 Support") {
     bot.sendMessage(
       chatId,
-      "📞 Contact support: @YourSupportHandle (Demo Only)"
+      "📞 Contact support: @YourSupportHandle"
     );
   }
 });
