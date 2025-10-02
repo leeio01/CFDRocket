@@ -19,7 +19,7 @@ mongoose
 const userSchema = new mongoose.Schema({
   chatId: { type: String, required: true, unique: true },
   name: String,
-  email: { type: String, unique: true, sparse: true },
+  email: { type: String, unique: true, sparse: true }, // ✅ sparse allows multiple nulls
   phone: String,
   city: String,
   country: String,
@@ -45,13 +45,8 @@ const User = mongoose.model("User", userSchema);
 // ================== BOT INIT ==================
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-bot.on("polling_error", (err) =>
-  console.error("Polling error:", err.message)
-);
-
-bot.on("message", (msg) => {
-  console.log("📩 Received:", msg.text);
-});
+bot.on("polling_error", (err) => console.error("Polling error:", err.message));
+bot.on("message", (msg) => console.log("📩 Received:", msg.text));
 
 // ================== START ==================
 bot.onText(/\/start/, async (msg) => {
@@ -60,7 +55,7 @@ bot.onText(/\/start/, async (msg) => {
   let user = await User.findOne({ chatId });
   if (!user) {
     try {
-      user = new User({ chatId, balance: 1000 }); // optional demo starting balance
+      user = new User({ chatId, balance: 1000 }); // demo starting balance
       await user.save();
     } catch (err) {
       console.error("❌ User creation error:", err.message);
@@ -82,7 +77,6 @@ bot.onText(/\/start/, async (msg) => {
 async function askKYC(chatId) {
   const fields = ["Full Name", "Email Address", "Phone Number", "City", "Country", "Age"];
   const answers = {};
-
   let i = 0;
 
   const askNext = () => {
@@ -90,8 +84,13 @@ async function askKYC(chatId) {
       bot.sendMessage(chatId, `Enter your ${fields[i]}:`);
 
       bot.once("message", (msg) => {
-        const key = fields[i].toLowerCase().replace(/ /g, "_");
-        answers[key] = msg.text.trim();
+        let key = fields[i].toLowerCase().replace(/ /g, "_");
+        let value = msg.text.trim();
+
+        // Fix email sparse issue
+        if (key === "email_address" && (!value || value === "")) value = null;
+
+        answers[key] = value;
         i++;
         askNext();
       });
@@ -105,7 +104,19 @@ async function askKYC(chatId) {
 
 async function saveKYC(chatId, data) {
   try {
-    await User.findOneAndUpdate({ chatId }, { ...data }, { new: true });
+    await User.findOneAndUpdate(
+      { chatId },
+      {
+        name: data.full_name,
+        email: data.email_address,
+        phone: data.phone_number,
+        city: data.city,
+        country: data.country,
+        age: data.age,
+      },
+      { new: true, upsert: true }
+    );
+
     bot.sendMessage(chatId, `✅ KYC Completed!\n\nWelcome, ${data.full_name}.`);
     showMainMenu(chatId);
   } catch (err) {
@@ -136,7 +147,7 @@ bot.on("message", async (msg) => {
   const user = await User.findOne({ chatId });
   if (!user) return;
 
-  // Deposit Wallets
+  // 💰 Deposit Wallets
   if (text === "💰 Deposit Wallets") {
     if (!user.wallets?.BTC) {
       user.wallets = {
@@ -146,6 +157,7 @@ bot.on("message", async (msg) => {
       };
       await user.save();
     }
+
     let reply = "💰 Your Deposit Wallets:\n\n";
     for (const [coin, address] of Object.entries(user.wallets)) {
       reply += `${coin}: \`${address}\`\n`;
@@ -153,12 +165,12 @@ bot.on("message", async (msg) => {
     bot.sendMessage(chatId, reply, { parse_mode: "Markdown" });
   }
 
-  // My Balance
+  // 📈 My Balance
   if (text === "📈 My Balance") {
     bot.sendMessage(chatId, `📈 Balance: ${user.balance} USDT`);
   }
 
-  // Transactions
+  // 📜 Transactions
   if (text === "📜 Transactions") {
     if (!user.transactions.length) {
       bot.sendMessage(chatId, "No transactions yet.");
@@ -171,12 +183,11 @@ bot.on("message", async (msg) => {
     }
   }
 
-  // Withdraw
+  // 💸 Withdraw
   if (text === "💸 Withdraw") {
     bot.sendMessage(chatId, "Enter amount to withdraw:");
     bot.once("message", async (amtMsg) => {
       const amount = Number(amtMsg.text);
-
       if (isNaN(amount) || amount <= 0) {
         bot.sendMessage(chatId, "❌ Invalid amount.");
         return;
@@ -194,14 +205,11 @@ bot.on("message", async (msg) => {
       user.balance -= amount;
       await user.save();
 
-      bot.sendMessage(
-        chatId,
-        `💸 Withdrawal of ${amount} USDT requested. Processing...`
-      );
+      bot.sendMessage(chatId, `💸 Withdrawal of ${amount} USDT requested. Processing...`);
     });
   }
 
-  // Support
+  // 📞 Support
   if (text === "📞 Support") {
     bot.sendMessage(chatId, "📞 Contact support: @YourSupportHandle");
   }
