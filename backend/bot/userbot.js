@@ -4,10 +4,22 @@ require("dotenv").config();
 
 // ENV Vars
 const BOT_TOKEN = process.env.USER_BOT_TOKEN;
-const API_BASE = process.env.API_BASE_URL; // e.g. "https://cfdrocket.vercel.app/api"
+const API_BASE = process.env.API_URL; // ✅ use correct env var
+
+console.log("🚀 User Bot starting...");
+console.log("API Base:", API_BASE);
+console.log("Token:", BOT_TOKEN ? "Loaded" : "Missing");
 
 // Create Bot
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+
+// Debug polling errors
+bot.on("polling_error", (err) => console.error("Polling error:", err.message));
+
+// Simple heartbeat
+bot.on("message", (msg) => {
+  console.log("📩 Received:", msg.text);
+});
 
 // Start
 bot.onText(/\/start/, async (msg) => {
@@ -61,7 +73,7 @@ async function askKYC(chatId) {
 
               showMainMenu(chatId);
             } catch (err) {
-              console.error(err.message);
+              console.error("❌ KYC Error:", err.message);
               bot.sendMessage(chatId, "❌ Error saving KYC. Try again.");
             }
           });
@@ -103,6 +115,7 @@ bot.on("message", async (msg) => {
 
       bot.sendMessage(chatId, reply, { parse_mode: "Markdown" });
     } catch (err) {
+      console.error("❌ Wallets Error:", err.message);
       bot.sendMessage(chatId, "❌ Could not fetch wallets.");
     }
   }
@@ -115,6 +128,7 @@ bot.on("message", async (msg) => {
         `📈 Demo Balance: ${res.data.balance} USDT (simulated)`
       );
     } catch (err) {
+      console.error("❌ Balance Error:", err.message);
       bot.sendMessage(chatId, "❌ Could not fetch balance.");
     }
   }
@@ -130,6 +144,7 @@ bot.on("message", async (msg) => {
 
       bot.sendMessage(chatId, reply || "No transactions yet.");
     } catch (err) {
+      console.error("❌ Transactions Error:", err.message);
       bot.sendMessage(chatId, "❌ Could not fetch transactions.");
     }
   }
@@ -147,6 +162,7 @@ bot.on("message", async (msg) => {
           "💸 Withdrawal Requested (Demo). Processing... up to 30 mins."
         );
       } catch (err) {
+        console.error("❌ Withdraw Error:", err.message);
         bot.sendMessage(chatId, "❌ Error requesting withdrawal.");
       }
     });
