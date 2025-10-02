@@ -32,9 +32,12 @@ const userSchema = new mongoose.Schema({
   },
   transactions: [
     {
-      type: String,
+      type: { type: String }, // Withdraw or Deposit
       amount: Number,
-      status: String,
+      status: String, // Pending, Completed
+      blockchain: String,
+      address: String,
+      txid: String,
       date: { type: Date, default: Date.now },
     },
   ],
@@ -56,6 +59,7 @@ const kycQuestions = [
 ];
 
 const userKYCState = {}; // chatId => { step, answers }
+const userWithdrawState = {}; // chatId => { step, amount, address, blockchain }
 
 // ================== START COMMAND ==================
 bot.onText(/\/start/, async (msg) => {
@@ -108,7 +112,7 @@ bot.on("message", async (msg) => {
   let user = await User.findOne({ chatId });
   if (!user) return bot.sendMessage(chatId, "❌ Please run /start first.");
 
-  // Handle KYC flow
+  // ===== KYC FLOW =====
   if (userKYCState[chatId]) {
     const state = userKYCState[chatId];
     const q = kycQuestions[state.step];
@@ -122,7 +126,55 @@ bot.on("message", async (msg) => {
     return askNextKYC(chatId);
   }
 
-  // ================== MENU ACTIONS ==================
+  // ===== WITHDRAW FLOW =====
+  if (userWithdrawState[chatId]) {
+    const state = userWithdrawState[chatId];
+
+    switch(state.step) {
+      case 0: // Amount
+        const amount = Number(text);
+        if (isNaN(amount) || amount <= 0) return bot.sendMessage(chatId, "❌ Invalid amount. Enter again:");
+        if (amount > user.balance) return bot.sendMessage(chatId, "❌ Insufficient balance. Enter again:");
+        state.amount = amount;
+        state.step++;
+        return bot.sendMessage(chatId, "Enter your deposit address:");
+      case 1: // Address first
+        state.address = text.trim();
+        state.step++;
+        return bot.sendMessage(chatId, "Confirm your deposit address again:");
+      case 2: // Address confirmation
+        if (state.address !== text.trim()) {
+          state.step = 1;
+          return bot.sendMessage(chatId, "❌ Addresses do not match. Enter your deposit address again:");
+        }
+        state.step++;
+        return bot.sendMessage(chatId, "Enter blockchain (USDT-BEP / USDT-ERC20 / BTC / ETH / SOL):");
+      case 3: // Blockchain
+        const chain = text.trim().toUpperCase();
+        const allowed = ["USDT-BEP","USDT-ERC20","BTC","ETH","SOL"];
+        if (!allowed.includes(chain)) return bot.sendMessage(chatId, "❌ Invalid blockchain. Enter again:");
+        state.blockchain = chain;
+
+        // Save pending transaction
+        user.transactions.push({
+          type: "Withdraw",
+          amount: state.amount,
+          status: "Pending",
+          address: state.address,
+          blockchain: state.blockchain
+        });
+        user.balance -= state.amount;
+        await user.save();
+
+        delete userWithdrawState[chatId];
+        bot.sendMessage(chatId, `💸 Withdrawal requested!\nAmount: ${state.amount}\nBlockchain: ${state.blockchain}\nPending approval by admin.`);
+
+        return showMainMenu(chatId);
+    }
+    return;
+  }
+
+  // ===== MENU ACTIONS =====
   switch(text) {
     case "💰 Deposit Wallets":
       if (!user.wallets?.BTC) {
@@ -139,26 +191,17 @@ bot.on("message", async (msg) => {
     case "📜 Transactions":
       if (!user.transactions.length) return bot.sendMessage(chatId, "No transactions yet.");
       let txReply = "📜 Transactions:\n\n";
-      user.transactions.forEach(tx => { txReply += `${tx.type} - ${tx.amount} USDT - ${tx.status} (${tx.date.toLocaleString()})\n`; });
+      user.transactions.forEach(tx => { txReply += `${tx.type} - ${tx.amount} USDT - ${tx.status} - ${tx.blockchain || ''} (${tx.date.toLocaleString()})\n`; });
       return bot.sendMessage(chatId, txReply);
 
     case "💸 Withdraw":
-      bot.sendMessage(chatId, "Enter amount to withdraw:");
-      return bot.once("message", async (amtMsg) => {
-        const amount = Number(amtMsg.text);
-        if (isNaN(amount) || amount <= 0) return bot.sendMessage(chatId, "❌ Invalid amount.");
-        if (amount > user.balance) return bot.sendMessage(chatId, "❌ Insufficient balance.");
-        user.transactions.push({ type: "Withdraw", amount, status: "Pending" });
-        user.balance -= amount;
-        await user.save();
-        return bot.sendMessage(chatId, `💸 Withdrawal of ${amount} USDT requested. Processing...`);
-      });
+      userWithdrawState[chatId] = { step: 0 };
+      return bot.sendMessage(chatId, "Enter amount to withdraw:");
 
     case "📞 Support":
       return bot.sendMessage(chatId, "📞 Contact support: @cfdrocket_support");
 
     default:
-      // Ignore unknown inputs
       return;
   }
 });
