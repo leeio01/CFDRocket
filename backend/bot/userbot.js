@@ -48,6 +48,11 @@ bot.on("polling_error", (err) =>
   console.error("Polling error:", err.message)
 );
 
+// Simple logging for received messages
+bot.on("message", (msg) => {
+  console.log("📩 Received:", msg.text);
+});
+
 // ================== START ==================
 bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
@@ -137,11 +142,11 @@ bot.on("message", async (msg) => {
   if (text === "💰 Deposit Wallets") {
     let wallets = user.wallets;
 
-    if (!wallets.BTC) {
+    if (!wallets?.BTC) {
       wallets = {
-        BTC: "btc_demo_wallet_" + chatId,
-        ETH: "eth_demo_wallet_" + chatId,
-        USDT: "usdt_demo_wallet_" + chatId,
+        BTC: "btc_wallet_" + chatId,
+        ETH: "eth_wallet_" + chatId,
+        USDT: "usdt_wallet_" + chatId,
       };
       user.wallets = wallets;
       await user.save();
@@ -189,6 +194,7 @@ bot.on("message", async (msg) => {
         amount,
         status: "Pending",
       });
+      user.balance -= amount; // deduct balance
       await user.save();
 
       bot.sendMessage(
