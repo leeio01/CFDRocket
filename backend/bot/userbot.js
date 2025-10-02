@@ -43,172 +43,143 @@ const User = mongoose.model("User", userSchema);
 
 // ================== BOT INIT ==================
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+bot.on("polling_error", (err) => console.error("Polling error:", err.message));
 
-bot.on("polling_error", (err) =>
-  console.error("Polling error:", err.message)
-);
+// ================== KYC STATE ==================
+const kycQuestions = [
+  { key: "name", question: "Enter your Full Name (First & Last):", validate: (txt) => txt.trim().split(" ").length >= 2 },
+  { key: "phone", question: "Enter your Phone Number (+123456789):", validate: (txt) => /^\+?\d{5,15}$/.test(txt) },
+  { key: "city", question: "Enter your City:", validate: (txt) => txt.trim().length > 0 },
+  { key: "country", question: "Enter your Country:", validate: (txt) => txt.trim().length > 0 },
+  { key: "age", question: "Enter your Age:", validate: (txt) => /^\d{1,3}$/.test(txt) },
+];
 
-// Simple logging for received messages
-bot.on("message", (msg) => {
-  console.log("📩 Received:", msg.text);
-});
+const userKYCState = {}; // chatId => { step, answers }
 
-// ================== START ==================
+// ================== START COMMAND ==================
 bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
-
   let user = await User.findOne({ chatId });
+
   if (!user) {
     user = new User({ chatId });
     await user.save();
-    bot.sendMessage(
-      chatId,
-      "👋 Welcome to CFDROCKET Earning Bot!\n\nPlease complete your KYC."
-    );
-    askKYC(chatId);
+  }
+
+  userKYCState[chatId] = userKYCState[chatId] || { step: 0, answers: {} };
+
+  if (!user.name) {
+    bot.sendMessage(chatId, "👋 Welcome to CFDROCKET Earning Bot!\nPlease complete your KYC.");
+    askNextKYC(chatId);
   } else {
-    bot.sendMessage(chatId, "👋 Welcome back!");
+    bot.sendMessage(chatId, `👋 Welcome back, ${user.name}!`);
     showMainMenu(chatId);
   }
 });
 
 // ================== KYC FLOW ==================
-async function askKYC(chatId) {
-  bot.sendMessage(chatId, "Please enter your Full Name:");
-  bot.once("message", async (nameMsg) => {
-    const name = nameMsg.text;
+function askNextKYC(chatId) {
+  const state = userKYCState[chatId];
+  if (!state) return;
 
-    bot.sendMessage(chatId, "Enter your Phone Number:");
-    bot.once("message", async (phoneMsg) => {
-      const phone = phoneMsg.text;
-
-      bot.sendMessage(chatId, "Enter your City:");
-      bot.once("message", async (cityMsg) => {
-        const city = cityMsg.text;
-
-        bot.sendMessage(chatId, "Enter your Country:");
-        bot.once("message", async (countryMsg) => {
-          const country = countryMsg.text;
-
-          bot.sendMessage(chatId, "Enter your Age:");
-          bot.once("message", async (ageMsg) => {
-            const age = ageMsg.text;
-
-            await User.findOneAndUpdate(
-              { chatId },
-              { name, phone, city, country, age },
-              { new: true }
-            );
-
-            bot.sendMessage(
-              chatId,
-              `✅ KYC Completed!\n\nWelcome, ${name}.`
-            );
-            showMainMenu(chatId);
-          });
-        });
-      });
+  if (state.step >= kycQuestions.length) {
+    // All questions answered → save to DB
+    User.findOneAndUpdate(
+      { chatId },
+      state.answers,
+      { new: true }
+    ).then(() => {
+      bot.sendMessage(chatId, `✅ KYC Completed! Welcome, ${state.answers.name}.`);
+      showMainMenu(chatId);
+      delete userKYCState[chatId];
     });
-  });
-}
-
-// ================== MAIN MENU ==================
-function showMainMenu(chatId) {
-  bot.sendMessage(chatId, "📍 Main Menu", {
-    reply_markup: {
-      keyboard: [
-        ["💰 Deposit Wallets", "📈 My Balance"],
-        ["📜 Transactions", "💸 Withdraw"],
-        ["📞 Support"],
-      ],
-      resize_keyboard: true,
-      one_time_keyboard: false,
-    },
-  });
-}
-
-// ================== MENU ACTIONS ==================
-bot.on("message", async (msg) => {
-  const chatId = msg.chat.id;
-  const text = msg.text;
-  let user = await User.findOne({ chatId });
-
-  if (!user) {
-    bot.sendMessage(chatId, "❌ Please run /start first.");
     return;
   }
 
-  // Deposit Wallets
-  if (text === "💰 Deposit Wallets") {
-    let wallets = user.wallets;
+  const q = kycQuestions[state.step];
+  bot.sendMessage(chatId, q.question);
+}
 
-    if (!wallets?.BTC) {
-      wallets = {
-        BTC: "btc_wallet_" + chatId,
-        ETH: "eth_wallet_" + chatId,
-        USDT: "usdt_wallet_" + chatId,
-      };
-      user.wallets = wallets;
+// ================== HANDLE MESSAGES ==================
+bot.on("message", async (msg) => {
+  const chatId = msg.chat.id;
+  const text = msg.text;
+
+  // Ignore /start here
+  if (text.startsWith("/start")) return;
+
+  // Check if user is in KYC flow
+  if (userKYCState[chatId]) {
+    const state = userKYCState[chatId];
+    const q = kycQuestions[state.step];
+
+    if (!q.validate(text)) {
+      return bot.sendMessage(chatId, `❌ Invalid input. ${q.question}`);
+    }
+
+    state.answers[q.key] = text.trim();
+    state.step++;
+    return askNextKYC(chatId);
+  }
+
+  // ================== MENU ACTIONS ==================
+  let user = await User.findOne({ chatId });
+  if (!user) return bot.sendMessage(chatId, "❌ Please run /start first.");
+
+  if (text === "💰 Deposit Wallets") {
+    if (!user.wallets?.BTC) {
+      user.wallets = { BTC: "btc_" + chatId, ETH: "eth_" + chatId, USDT: "usdt_" + chatId };
       await user.save();
     }
 
     let reply = "💰 Your Deposit Wallets:\n\n";
-    for (const [coin, address] of Object.entries(wallets)) {
+    for (const [coin, address] of Object.entries(user.wallets)) {
       reply += `${coin}: \`${address}\`\n`;
     }
-
-    bot.sendMessage(chatId, reply, { parse_mode: "Markdown" });
+    return bot.sendMessage(chatId, reply, { parse_mode: "Markdown" });
   }
 
-  // My Balance
   if (text === "📈 My Balance") {
-    bot.sendMessage(chatId, `📈 Balance: ${user.balance} USDT`);
+    return bot.sendMessage(chatId, `📈 Balance: ${user.balance} USDT`);
   }
 
-  // Transactions
   if (text === "📜 Transactions") {
-    if (!user.transactions.length) {
-      bot.sendMessage(chatId, "No transactions yet.");
-    } else {
-      let reply = "📜 Your Transactions:\n\n";
-      user.transactions.forEach((tx) => {
-        reply += `${tx.type} - ${tx.amount} USDT - ${tx.status} (${tx.date.toLocaleString()})\n`;
-      });
-      bot.sendMessage(chatId, reply);
-    }
+    if (!user.transactions.length) return bot.sendMessage(chatId, "No transactions yet.");
+
+    let reply = "📜 Transactions:\n\n";
+    user.transactions.forEach(tx => {
+      reply += `${tx.type} - ${tx.amount} USDT - ${tx.status} (${tx.date.toLocaleString()})\n`;
+    });
+    return bot.sendMessage(chatId, reply);
   }
 
-  // Withdraw
   if (text === "💸 Withdraw") {
     bot.sendMessage(chatId, "Enter amount to withdraw:");
-    bot.once("message", async (amtMsg) => {
+    return bot.once("message", async (amtMsg) => {
       const amount = Number(amtMsg.text);
+      if (isNaN(amount) || amount <= 0) return bot.sendMessage(chatId, "❌ Invalid amount.");
+      if (amount > user.balance) return bot.sendMessage(chatId, "❌ Insufficient balance.");
 
-      if (isNaN(amount) || amount <= 0) {
-        bot.sendMessage(chatId, "❌ Invalid amount.");
-        return;
-      }
-
-      user.transactions.push({
-        type: "Withdraw",
-        amount,
-        status: "Pending",
-      });
-      user.balance -= amount; // deduct balance
+      user.transactions.push({ type: "Withdraw", amount, status: "Pending" });
+      user.balance -= amount;
       await user.save();
-
-      bot.sendMessage(
-        chatId,
-        `💸 Withdrawal of ${amount} USDT requested. Processing...`
-      );
+      return bot.sendMessage(chatId, `💸 Withdrawal of ${amount} USDT requested. Processing...`);
     });
   }
 
-  // Support
   if (text === "📞 Support") {
-    bot.sendMessage(
-      chatId,
-      "📞 Contact support: @cfdrocket_support"
-    );
+    return bot.sendMessage(chatId, "📞 Contact support: @cfdrocket_support");
   }
 });
+
+// ================== MAIN MENU ==================
+function showMainMenu(chatId) {
+  const keyboard = [
+    ["💰 Deposit Wallets", "📈 My Balance"],
+    ["📜 Transactions", "💸 Withdraw"],
+    ["📞 Support"]
+  ];
+  bot.sendMessage(chatId, "📍 Main Menu", {
+    reply_markup: { keyboard, resize_keyboard: true, one_time_keyboard: false }
+  });
+}
