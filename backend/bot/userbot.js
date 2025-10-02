@@ -19,6 +19,7 @@ mongoose
 const userSchema = new mongoose.Schema({
   chatId: { type: String, required: true, unique: true },
   name: String,
+  email: { type: String, unique: true, sparse: true }, // optional but unique
   phone: String,
   city: String,
   country: String,
@@ -48,7 +49,6 @@ bot.on("polling_error", (err) =>
   console.error("Polling error:", err.message)
 );
 
-// Simple logging for received messages
 bot.on("message", (msg) => {
   console.log("📩 Received:", msg.text);
 });
@@ -78,33 +78,45 @@ async function askKYC(chatId) {
   bot.once("message", async (nameMsg) => {
     const name = nameMsg.text;
 
-    bot.sendMessage(chatId, "Enter your Phone Number:");
-    bot.once("message", async (phoneMsg) => {
-      const phone = phoneMsg.text;
+    bot.sendMessage(chatId, "Enter your Email Address:");
+    bot.once("message", async (emailMsg) => {
+      const email = emailMsg.text;
 
-      bot.sendMessage(chatId, "Enter your City:");
-      bot.once("message", async (cityMsg) => {
-        const city = cityMsg.text;
+      bot.sendMessage(chatId, "Enter your Phone Number:");
+      bot.once("message", async (phoneMsg) => {
+        const phone = phoneMsg.text;
 
-        bot.sendMessage(chatId, "Enter your Country:");
-        bot.once("message", async (countryMsg) => {
-          const country = countryMsg.text;
+        bot.sendMessage(chatId, "Enter your City:");
+        bot.once("message", async (cityMsg) => {
+          const city = cityMsg.text;
 
-          bot.sendMessage(chatId, "Enter your Age:");
-          bot.once("message", async (ageMsg) => {
-            const age = ageMsg.text;
+          bot.sendMessage(chatId, "Enter your Country:");
+          bot.once("message", async (countryMsg) => {
+            const country = countryMsg.text;
 
-            await User.findOneAndUpdate(
-              { chatId },
-              { name, phone, city, country, age },
-              { new: true }
-            );
+            bot.sendMessage(chatId, "Enter your Age:");
+            bot.once("message", async (ageMsg) => {
+              const age = ageMsg.text;
 
-            bot.sendMessage(
-              chatId,
-              `✅ KYC Completed!\n\nWelcome, ${name}.`
-            );
-            showMainMenu(chatId);
+              // Save KYC to DB
+              try {
+                await User.findOneAndUpdate(
+                  { chatId },
+                  { name, email, phone, city, country, age },
+                  { new: true }
+                );
+
+                bot.sendMessage(
+                  chatId,
+                  `✅ KYC Completed!\n\nWelcome, ${name}.`
+                );
+
+                showMainMenu(chatId);
+              } catch (err) {
+                console.error("❌ KYC Error:", err.message);
+                bot.sendMessage(chatId, "❌ Error saving KYC. Try again.");
+              }
+            });
           });
         });
       });
@@ -206,9 +218,6 @@ bot.on("message", async (msg) => {
 
   // Support
   if (text === "📞 Support") {
-    bot.sendMessage(
-      chatId,
-      "📞 Contact support: @YourSupportHandle"
-    );
+    bot.sendMessage(chatId, "📞 Contact support: @YourSupportHandle");
   }
 });
