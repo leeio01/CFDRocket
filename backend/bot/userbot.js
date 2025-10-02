@@ -208,7 +208,7 @@ bot.on("message", async (msg) => {
   if (text === "📞 Support") {
     bot.sendMessage(
       chatId,
-      "📞 Contact support: @YourSupportHandle"
+      "📞 Contact support: @cfdrocket_support"
     );
   }
 });
