@@ -19,7 +19,7 @@ mongoose
 const userSchema = new mongoose.Schema({
   chatId: { type: String, required: true, unique: true },
   name: String,
-  email: { type: String, unique: true, sparse: true }, // optional but unique
+  email: { type: String, unique: true, sparse: true },
   phone: String,
   city: String,
   country: String,
@@ -59,8 +59,14 @@ bot.onText(/\/start/, async (msg) => {
 
   let user = await User.findOne({ chatId });
   if (!user) {
-    user = new User({ chatId });
-    await user.save();
+    try {
+      user = new User({ chatId, balance: 1000 }); // optional demo starting balance
+      await user.save();
+    } catch (err) {
+      console.error("❌ User creation error:", err.message);
+      bot.sendMessage(chatId, "❌ Error creating your profile. Try again.");
+      return;
+    }
     bot.sendMessage(
       chatId,
       "👋 Welcome to CFDROCKET Earning Bot!\n\nPlease complete your KYC."
@@ -74,54 +80,38 @@ bot.onText(/\/start/, async (msg) => {
 
 // ================== KYC FLOW ==================
 async function askKYC(chatId) {
-  bot.sendMessage(chatId, "Please enter your Full Name:");
-  bot.once("message", async (nameMsg) => {
-    const name = nameMsg.text;
+  const fields = ["Full Name", "Email Address", "Phone Number", "City", "Country", "Age"];
+  const answers = {};
 
-    bot.sendMessage(chatId, "Enter your Email Address:");
-    bot.once("message", async (emailMsg) => {
-      const email = emailMsg.text;
+  let i = 0;
 
-      bot.sendMessage(chatId, "Enter your Phone Number:");
-      bot.once("message", async (phoneMsg) => {
-        const phone = phoneMsg.text;
+  const askNext = () => {
+    if (i < fields.length) {
+      bot.sendMessage(chatId, `Enter your ${fields[i]}:`);
 
-        bot.sendMessage(chatId, "Enter your City:");
-        bot.once("message", async (cityMsg) => {
-          const city = cityMsg.text;
-
-          bot.sendMessage(chatId, "Enter your Country:");
-          bot.once("message", async (countryMsg) => {
-            const country = countryMsg.text;
-
-            bot.sendMessage(chatId, "Enter your Age:");
-            bot.once("message", async (ageMsg) => {
-              const age = ageMsg.text;
-
-              // Save KYC to DB
-              try {
-                await User.findOneAndUpdate(
-                  { chatId },
-                  { name, email, phone, city, country, age },
-                  { new: true }
-                );
-
-                bot.sendMessage(
-                  chatId,
-                  `✅ KYC Completed!\n\nWelcome, ${name}.`
-                );
-
-                showMainMenu(chatId);
-              } catch (err) {
-                console.error("❌ KYC Error:", err.message);
-                bot.sendMessage(chatId, "❌ Error saving KYC. Try again.");
-              }
-            });
-          });
-        });
+      bot.once("message", (msg) => {
+        const key = fields[i].toLowerCase().replace(/ /g, "_");
+        answers[key] = msg.text.trim();
+        i++;
+        askNext();
       });
-    });
-  });
+    } else {
+      saveKYC(chatId, answers);
+    }
+  };
+
+  askNext();
+}
+
+async function saveKYC(chatId, data) {
+  try {
+    await User.findOneAndUpdate({ chatId }, { ...data }, { new: true });
+    bot.sendMessage(chatId, `✅ KYC Completed!\n\nWelcome, ${data.full_name}.`);
+    showMainMenu(chatId);
+  } catch (err) {
+    console.error("❌ KYC Save Error:", err.message);
+    bot.sendMessage(chatId, "❌ Error saving KYC. Try again.");
+  }
 }
 
 // ================== MAIN MENU ==================
@@ -143,32 +133,23 @@ function showMainMenu(chatId) {
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text;
-  let user = await User.findOne({ chatId });
-
-  if (!user) {
-    bot.sendMessage(chatId, "❌ Please run /start first.");
-    return;
-  }
+  const user = await User.findOne({ chatId });
+  if (!user) return;
 
   // Deposit Wallets
   if (text === "💰 Deposit Wallets") {
-    let wallets = user.wallets;
-
-    if (!wallets?.BTC) {
-      wallets = {
+    if (!user.wallets?.BTC) {
+      user.wallets = {
         BTC: "btc_wallet_" + chatId,
         ETH: "eth_wallet_" + chatId,
         USDT: "usdt_wallet_" + chatId,
       };
-      user.wallets = wallets;
       await user.save();
     }
-
     let reply = "💰 Your Deposit Wallets:\n\n";
-    for (const [coin, address] of Object.entries(wallets)) {
+    for (const [coin, address] of Object.entries(user.wallets)) {
       reply += `${coin}: \`${address}\`\n`;
     }
-
     bot.sendMessage(chatId, reply, { parse_mode: "Markdown" });
   }
 
@@ -200,13 +181,17 @@ bot.on("message", async (msg) => {
         bot.sendMessage(chatId, "❌ Invalid amount.");
         return;
       }
+      if (amount > user.balance) {
+        bot.sendMessage(chatId, "❌ Insufficient balance.");
+        return;
+      }
 
       user.transactions.push({
         type: "Withdraw",
         amount,
         status: "Pending",
       });
-      user.balance -= amount; // deduct balance
+      user.balance -= amount;
       await user.save();
 
       bot.sendMessage(
