@@ -20,3 +20,6 @@ Thumbs.db
 # AWS
 /userbot.pem
 /adminbot.pem
+
+# credentials
+dev.txt
