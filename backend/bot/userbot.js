@@ -162,12 +162,18 @@ bot.on("message", async (msg) => {
 
     switch(state.step) {
       case 0: // Amount
-        const amount = Number(text);
-        if (isNaN(amount) || amount <= 0) return bot.sendMessage(chatId, "❌ Invalid amount. Enter again:");
-        if (amount > user.balance) return bot.sendMessage(chatId, "❌ Insufficient balance. Enter again:");
-        state.amount = amount;
-        state.step++;
-        return bot.sendMessage(chatId, "Enter your deposit address:");
+  if (text.toLowerCase() === "exit") {
+    delete userWithdrawState[chatId];
+    return bot.sendMessage(chatId, "❌ Withdrawal canceled. Returning to main menu.");
+  }
+
+  const amount = Number(text);
+  if (isNaN(amount) || amount <= 0) return bot.sendMessage(chatId, "❌ Invalid amount. Enter again or type 'Exit' to cancel:");
+  if (amount > user.balance) return bot.sendMessage(chatId, "❌ Insufficient balance. Enter again or type 'Exit' to cancel:");
+  state.amount = amount;
+  state.step++;
+  return bot.sendMessage(chatId, "Enter your deposit address (or type 'Exit' to cancel):");
+
       case 1: // Address first
         state.address = text.trim();
         state.step++;
@@ -231,10 +237,30 @@ bot.on("message", async (msg) => {
     case "📜 Transactions":
       if (!user.transactions.length) return bot.sendMessage(chatId, "No transactions yet.");
       let txReply = "📜 Transactions:\n\n";
-      user.transactions.forEach(tx => {
-        txReply += `${tx.type} - ${tx.amount} USDT - ${tx.status} - ${tx.blockchain || ''} (${tx.date.toLocaleString()})\n`;
-      });
-      return bot.sendMessage(chatId, txReply);
+user.transactions.forEach(tx => {
+  // Add color for status
+  let statusText;
+  switch(tx.status.toLowerCase()) {
+    case "pending":
+      statusText = "⏳ Pending";
+      break;
+    case "approved":
+      statusText = "✅ Approved";
+      break;
+    case "rejected":
+      statusText = "❌ Rejected";
+      break;
+    case "completed":
+      statusText = "🎉 Completed";
+      break;
+    default:
+      statusText = tx.status;
+  }
+
+  txReply += `${tx.type} - ${tx.amount} USDT - ${statusText} - ${tx.blockchain || ''} (${tx.date.toLocaleString()})\n`;
+});
+return bot.sendMessage(chatId, txReply);
+
 
     case "💸 Withdraw":
       userWithdrawState[chatId] = { step: 0 };
