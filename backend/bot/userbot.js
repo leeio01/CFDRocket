@@ -12,16 +12,17 @@ const BINANCE_API_SECRET = process.env.BINANCE_API_SECRET;
 const BINANCE_TESTNET = process.env.BINANCE_TESTNET === "true";
 
 console.log("🚀 User Bot starting...");
-console.log("Token:", BOT_TOKEN ? "Loaded" : "Missing");
-console.log("MongoDB:", MONGO_URI ? "Loaded" : "Missing");
-console.log("Binance API:", BINANCE_API_KEY ? "Loaded" : "Missing");
+console.log("Token:", BOT_TOKEN ? "Loaded ✅" : "❌ Missing");
+console.log("MongoDB:", MONGO_URI ? "Loaded ✅" : "❌ Missing");
+console.log("Binance API:", BINANCE_API_KEY ? "Loaded ✅" : "❌ Missing");
 
-// ================== DB MODELS ==================
+// ================== DB Connection ==================
 mongoose
   .connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB Error:", err.message));
 
+// ================== DB Model ==================
 const userSchema = new mongoose.Schema({
   chatId: { type: String, required: true, unique: true },
   name: String,
@@ -36,9 +37,9 @@ const userSchema = new mongoose.Schema({
   },
   transactions: [
     {
-      type: { type: String }, // Withdraw or Deposit
+      type: { type: String },
       amount: Number,
-      status: String, // Pending, Completed
+      status: String,
       blockchain: String,
       address: String,
       txid: String,
@@ -53,8 +54,13 @@ const User = mongoose.model("User", userSchema);
 const binance = new Binance().options({
   APIKEY: BINANCE_API_KEY,
   APISECRET: BINANCE_API_SECRET,
-  test: BINANCE_TESTNET, // connects to testnet if true
+  test: BINANCE_TESTNET, // true = testnet
+  urls: BINANCE_TESTNET
+    ? { base: "https://testnet.binance.vision/api/" } // use testnet API
+    : undefined,
 });
+
+binance.useServerTime(); // avoid timestamp errors
 console.log(`✅ Binance connected [${BINANCE_TESTNET ? "Testnet" : "Mainnet"}]`);
 
 // ================== BOT INIT ==================
@@ -140,7 +146,6 @@ bot.on("message", async (msg) => {
   // ===== DEPOSIT PROOF HANDLING =====
   if (userDepositState[chatId]) {
     const state = userDepositState[chatId];
-
     let proof;
     if (msg.photo) {
       proof = msg.photo[msg.photo.length - 1].file_id;
@@ -169,7 +174,6 @@ bot.on("message", async (msg) => {
   // ===== WITHDRAW FLOW =====
   if (userWithdrawState[chatId]) {
     const state = userWithdrawState[chatId];
-
     switch (state.step) {
       case 0:
         if (text.toLowerCase() === "exit") {
@@ -190,13 +194,15 @@ bot.on("message", async (msg) => {
         state.address = text.trim();
         state.step++;
         return bot.sendMessage(chatId, "Confirm your deposit address again:");
+
       case 2:
         if (state.address !== text.trim()) {
           state.step = 1;
-          return bot.sendMessage(chatId, "❌ Addresses do not match. Enter your deposit address again:");
+          return bot.sendMessage(chatId, "❌ Addresses do not match. Enter again:");
         }
         state.step++;
         return bot.sendMessage(chatId, "Enter blockchain (USDT-BEP / USDT-ERC20 / BTC / ETH / SOL):");
+
       case 3:
         const chain = text.trim().toUpperCase();
         const allowed = ["USDT-BEP", "USDT-ERC20", "BTC", "ETH", "SOL"];
@@ -216,7 +222,7 @@ bot.on("message", async (msg) => {
         delete userWithdrawState[chatId];
         bot.sendMessage(
           chatId,
-          `💸 Withdrawal requested!\nAmount: ${state.amount}\nBlockchain: ${state.blockchain}\nPending approval by admin.`
+          `💸 Withdrawal requested!\nAmount: ${state.amount}\nBlockchain: ${state.blockchain}\nPending admin approval.`
         );
 
         return showMainMenu(chatId);
@@ -251,25 +257,13 @@ bot.on("message", async (msg) => {
       if (!user.transactions.length) return bot.sendMessage(chatId, "No transactions yet.");
       let txReply = "📜 Transactions:\n\n";
       user.transactions.forEach((tx) => {
-        let statusText;
-        switch (tx.status.toLowerCase()) {
-          case "pending":
-            statusText = "⏳ Pending";
-            break;
-          case "approved":
-            statusText = "✅ Approved";
-            break;
-          case "rejected":
-            statusText = "❌ Rejected";
-            break;
-          case "completed":
-            statusText = "🎉 Completed";
-            break;
-          default:
-            statusText = tx.status;
-        }
-
-        txReply += `${tx.type} - ${tx.amount} USDT - ${statusText} - ${tx.blockchain || ""} (${tx.date.toLocaleString()})\n`;
+        const statusText =
+          tx.status === "Pending"
+            ? "⏳ Pending"
+            : tx.status === "Completed"
+            ? "✅ Completed"
+            : tx.status;
+        txReply += `${tx.type} - ${tx.amount} USDT - ${statusText} (${tx.date.toLocaleString()})\n`;
       });
       return bot.sendMessage(chatId, txReply);
 
@@ -287,14 +281,15 @@ bot.on("message", async (msg) => {
           .map((s) => `${s}: ${prices[s]} USDT`)
           .join("\n");
 
+        return bot.sendMessage(chatId, `📊 *Market Prices (Top 10 USDT pairs)*:\n\n${usdtPairs}`, {
+          parse_mode: "Markdown",
+        });
+      } catch (err) {
+        console.error("❌ Binance Error:", err.message);
         return bot.sendMessage(
           chatId,
-          `📊 *Market Prices (Top 10 USDT pairs)*:\n\n${usdtPairs}`,
-          { parse_mode: "Markdown" }
+          "⚠️ Unable to fetch market data. Please ensure your Binance Testnet key is valid."
         );
-      } catch (err) {
-        console.error("Binance Error:", err.message);
-        return bot.sendMessage(chatId, "⚠️ Unable to fetch market data. Please try again later.");
       }
 
     case "📞 Support":
