@@ -55,10 +55,10 @@ const binance = new Binance().options({
   APIKEY: BINANCE_API_KEY,
   APISECRET: BINANCE_API_SECRET,
   test: BINANCE_TESTNET, // true = testnet
-  family: 4, // fix some DNS issues
+  family: 4,
   ...(BINANCE_TESTNET && {
     urls: {
-      base: "https://testnet.binance.vision", // ✅ correct testnet URL
+      base: "https://testnet.binance.vision", // correct testnet base URL
       stream: "wss://testnet.binance.vision/ws",
     },
   }),
@@ -100,7 +100,7 @@ bot.onText(/\/start/, async (msg) => {
     bot.sendMessage(chatId, "👋 Welcome to CFDROCKET Earning Bot!\nPlease complete your KYC.");
     askNextKYC(chatId);
   } else {
-    bot.sendMessage(chatId, `👋 Welcome back, ${user.name}!`);
+    bot.sendMessage(chatId, `👋 Welcome back, ${user.name || "user"}!`);
     showMainMenu(chatId);
   }
 });
@@ -123,11 +123,51 @@ function askNextKYC(chatId) {
   bot.sendMessage(chatId, q.question);
 }
 
+// ================== Helper Promisified Binance Calls ==================
+function getBalances() {
+  return new Promise((resolve, reject) => {
+    binance.balance((err, balances) => {
+      if (err) return reject(err);
+      resolve(balances);
+    });
+  });
+}
+
+function placeMarketBuy(symbol, quantity) {
+  return new Promise((resolve, reject) => {
+    binance.marketBuy(symbol, quantity, (err, response) => {
+      if (err) return reject(err);
+      resolve(response);
+    });
+  });
+}
+
+function placeMarketSell(symbol, quantity) {
+  return new Promise((resolve, reject) => {
+    binance.marketSell(symbol, quantity, (err, response) => {
+      if (err) return reject(err);
+      resolve(response);
+    });
+  });
+}
+
+function getOpenOrders(symbol = "") {
+  return new Promise((resolve, reject) => {
+    binance.openOrders(symbol, (err, openOrders) => {
+      if (err) return reject(err);
+      resolve(openOrders);
+    });
+  });
+}
+
 // ================== MESSAGE HANDLER ==================
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
-  const text = msg.text;
+  const text = (msg.text || "").trim();
 
+  if (!text) return;
+
+  // If user sends /start via message we ignore because onText handles it
   if (text.startsWith("/start")) return;
 
   let user = await User.findOne({ chatId });
@@ -234,7 +274,13 @@ bot.on("message", async (msg) => {
     return;
   }
 
-  // ===== MENU ACTIONS =====
+  // ===== MENU ACTIONS & Quick Commands (text matching) =====
+  // Support quick-runtime commands like /buy, /sell, /balance, /openorders
+  if (text.toLowerCase().startsWith("/buy") || text.toLowerCase().startsWith("/sell")) {
+    // handled by onText below; ignore here
+    return;
+  }
+
   switch (text) {
     case "💰 Deposit Wallets":
       if (!user.wallets?.BTC) {
@@ -275,32 +321,114 @@ bot.on("message", async (msg) => {
       userWithdrawState[chatId] = { step: 0 };
       return bot.sendMessage(chatId, "Enter amount to withdraw:");
 
-    // ====== BINANCE TRADES ======
     case "📊 Trades":
+      // Testnet doesn't provide market prices — show mock prices and emphasize testnet trading works
       try {
-        const prices = await binance.prices();
+        let prices = {};
+        try {
+          prices = await binance.prices(); // may fail on testnet for public data
+        } catch (e) {
+          // testnet public endpoints often don't have price data — fallback to mock prices
+          prices = {
+            BTCUSDT: "65000.00",
+            ETHUSDT: "2500.00",
+            BNBUSDT: "300.00",
+            SOLUSDT: "120.00",
+            XRPUSDT: "0.60",
+            ADAUSDT: "0.45",
+            DOGEUSDT: "0.12",
+            DOTUSDT: "6.50",
+            MATICUSDT: "0.80",
+            LINKUSDT: "15.00",
+          };
+        }
+
         const usdtPairs = Object.keys(prices)
           .filter((s) => s.endsWith("USDT"))
           .slice(0, 10)
           .map((s) => `${s}: ${prices[s]} USDT`)
           .join("\n");
 
-        return bot.sendMessage(chatId, `📊 *Market Prices (Top 10 USDT pairs)*:\n\n${usdtPairs}`, {
-          parse_mode: "Markdown",
-        });
-      } catch (err) {
-        console.error("❌ Binance Error:", err.message);
         return bot.sendMessage(
           chatId,
-          "⚠️ Unable to fetch market data. Please ensure your Binance Testnet key is valid."
+          `📊 *Mock/Available Market Prices (Testnet)*:\n\n${usdtPairs}\n\nUse /buy SYMBOL QTY or /sell SYMBOL QTY to place market orders on Testnet.`,
+          { parse_mode: "Markdown" }
         );
+      } catch (err) {
+        console.error("❌ Binance Error (Trades):", err);
+        return bot.sendMessage(chatId, "⚠️ Unable to fetch market data. Testnet trading is still supported.");
       }
 
     case "📞 Support":
       return bot.sendMessage(chatId, "📞 Contact support: @cfdrocket_support");
 
     default:
-      return;
+      return showMainMenu(chatId);
+  }
+});
+
+// ================== COMMAND: /balance (shows testnet balances) ==================
+bot.onText(/^\/balance$/i, async (msg) => {
+  const chatId = msg.chat.id;
+  try {
+    const balances = await getBalances();
+    // show only non-zero balances
+    const nonZero = Object.entries(balances)
+      .filter(([sym, val]) => Number(val.available) > 0 || Number(val.onOrder) > 0)
+      .map(([sym, val]) => `${sym} — free: ${val.available} | onOrder: ${val.onOrder}`)
+      .join("\n");
+
+    const reply = nonZero || "No balances (or all zero).";
+    return bot.sendMessage(chatId, `📊 Testnet Balances:\n\n${reply}`);
+  } catch (err) {
+    console.error("❌ /balance error:", err);
+    return bot.sendMessage(chatId, "⚠️ Unable to fetch balances. Make sure your Testnet API key is correct.");
+  }
+});
+
+// ================== COMMAND: /openorders (show open orders) ==================
+bot.onText(/^\/openorders(?:\s+(\S+))?$/i, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const symbol = (match && match[1]) ? match[1].toUpperCase() : ""; // optional
+  try {
+    const open = await getOpenOrders(symbol);
+    if (!open || !open.length) return bot.sendMessage(chatId, "No open orders.");
+    const list = open.map(o => `${o.symbol} ${o.side} ${o.origQty} @ ${o.price || "market"} (id:${o.orderId})`).join("\n");
+    return bot.sendMessage(chatId, `📋 Open Orders:\n\n${list}`);
+  } catch (err) {
+    console.error("❌ /openorders error:", err);
+    return bot.sendMessage(chatId, "⚠️ Unable to fetch open orders. Check API key permissions.");
+  }
+});
+
+// ================== COMMANDS: /buy and /sell (market orders on testnet) ==================
+bot.onText(/^\/buy\s+([A-Za-z0-9]+)\s+([0-9]*\.?[0-9]+)$/i, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const symbol = match[1].toUpperCase();
+  const qty = match[2];
+  try {
+    await bot.sendMessage(chatId, `Placing market BUY order: ${symbol} quantity ${qty} (testnet) ...`);
+    const res = await placeMarketBuy(symbol, qty);
+    await bot.sendMessage(chatId, `✅ Buy order placed (Testnet):\n${JSON.stringify(res)}`);
+  } catch (err) {
+    console.error("❌ /buy error:", err);
+    const errMsg = (err && err.body) ? err.body : (err && err.message) ? err.message : String(err);
+    return bot.sendMessage(chatId, `⚠️ Buy failed: ${errMsg}`);
+  }
+});
+
+bot.onText(/^\/sell\s+([A-Za-z0-9]+)\s+([0-9]*\.?[0-9]+)$/i, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const symbol = match[1].toUpperCase();
+  const qty = match[2];
+  try {
+    await bot.sendMessage(chatId, `Placing market SELL order: ${symbol} quantity ${qty} (testnet) ...`);
+    const res = await placeMarketSell(symbol, qty);
+    await bot.sendMessage(chatId, `✅ Sell order placed (Testnet):\n${JSON.stringify(res)}`);
+  } catch (err) {
+    console.error("❌ /sell error:", err);
+    const errMsg = (err && err.body) ? err.body : (err && err.message) ? err.message : String(err);
+    return bot.sendMessage(chatId, `⚠️ Sell failed: ${errMsg}`);
   }
 });
 
