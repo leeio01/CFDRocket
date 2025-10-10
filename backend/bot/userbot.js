@@ -55,9 +55,13 @@ const binance = new Binance().options({
   APIKEY: BINANCE_API_KEY,
   APISECRET: BINANCE_API_SECRET,
   test: BINANCE_TESTNET, // true = testnet
-  urls: BINANCE_TESTNET
-    ? { base: "https://testnet.binance.vision/api/" } // use testnet API
-    : undefined,
+  family: 4, // fix some DNS issues
+  ...(BINANCE_TESTNET && {
+    urls: {
+      base: "https://testnet.binance.vision", // ✅ correct testnet URL
+      stream: "wss://testnet.binance.vision/ws",
+    },
+  }),
 });
 
 binance.useServerTime(); // avoid timestamp errors
