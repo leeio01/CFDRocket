@@ -18,8 +18,7 @@
 Thumbs.db
 
 # AWS
-/userbot.pem
-/adminbot.pem
+/bots.pem
 
 # credentials
 dev.txt
