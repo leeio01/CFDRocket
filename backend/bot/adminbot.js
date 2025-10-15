@@ -79,21 +79,33 @@ bot.command('viewuser_country', async (ctx) => {
 
 bot.command('adduser', async (ctx) => {
   ctx.reply('Send user info as: name,phone,city,country,age,balance');
-  bot.on('text', async (ctx2) => {
+  
+  const listener = async (ctx2) => {
+    if (ctx2.from.id !== ADMIN_ID) return;
     const parts = ctx2.message.text.split(',');
     if (parts.length < 6) return ctx2.reply('Invalid format.');
-    const [name, phone, city, country, age, balance] = parts;
-    const user = new User({ chatId: Date.now().toString(), name, phone, city, country, age, balance: Number(balance) });
-    await user.save();
-    ctx2.reply(`✅ User added: ${name}`);
-  });
+    const [name, phone, city, country, age, balance] = parts.map(p => p.trim());
+    const chatId = Date.now().toString() + Math.floor(Math.random() * 1000);
+    try {
+      const user = new User({ chatId, name, phone, city, country, age, balance: Number(balance) });
+      await user.save();
+      ctx2.reply(`✅ User added: ${name}`);
+    } catch (err) {
+      if (err.code === 11000) return ctx2.reply('❌ Duplicate user.');
+      ctx2.reply('❌ Error adding user: ' + err.message);
+    }
+    bot.off('text', listener); // remove listener after use
+  };
+  
+  bot.on('text', listener);
 });
 
 bot.command('deleteuser', async (ctx) => {
   const chatId = ctx.message.text.split(' ')[1];
   if (!chatId) return ctx.reply('Usage: /deleteuser <chatId>');
-  await User.findOneAndDelete({ chatId });
-  ctx.reply(`✅ User ${chatId} deleted.`);
+  const res = await User.findOneAndDelete({ chatId });
+  if (res) ctx.reply(`✅ User ${chatId} deleted.`);
+  else ctx.reply('❌ User not found.');
 });
 
 bot.command('viewbalances', async (ctx) => {
