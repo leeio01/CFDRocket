@@ -12,7 +12,7 @@ const mongoose = require("mongoose");
 require("dotenv").config();
 
 // ✅ Correct paths (important!)
-const User = require("../models/user");
+const User = require("../models/User");
 const Wallet = require("../models/wallet");
 const TradeLog = require("../models/tradeLog");
 
