@@ -296,3 +296,33 @@ ul li:hover {
   display: flex;
   align-items: center;      /* align text vertically with checkbox */
 }
+/* Sidebar hover effect */
+.sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.active-sidebar-link {
+  background: linear-gradient(135deg, #ff00ff, #00ffff);
+  color: #fff !important;
+}
+
+/* Optional: animate hamburger */
+.hamburger:hover {
+  transform: scale(1.1);
+  transition: transform 0.2s ease;
+}
+/* Sidebar hover effect */
+.sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.active-sidebar-link {
+  background: linear-gradient(135deg, #ff00ff, #00ffff);
+  color: #fff !important;
+}
+
+/* Hamburger hover animation */
+.hamburger:hover {
+  transform: scale(1.1);
+  transition: transform 0.2s ease;
+}
