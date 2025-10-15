@@ -1,200 +1,116 @@
 require('dotenv').config();
 const { Telegraf } = require('telegraf');
-const axios = require('axios');
+const mongoose = require('mongoose');
 
-const API = process.env.API_URL || 'http://localhost:4000';
 const ADMIN_ID = parseInt(process.env.ADMIN_CHAT_ID);
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+const bot = new Telegraf(BOT_TOKEN);
+
+mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+
+const userSchema = new mongoose.Schema({
+  chatId: { type: String, required: true, unique: true },
+  name: String,
+  phone: String,
+  city: String,
+  country: String,
+  age: String,
+  balance: { type: Number, default: 0 },
+});
+const User = mongoose.model('User', userSchema);
 
 bot.use((ctx, next) => {
-  if (ctx.from.id !== ADMIN_ID) {
-    ctx.reply("❌ You are not authorized to use this bot.");
-    return;
-  }
+  if (ctx.from.id !== ADMIN_ID) return ctx.reply("❌ You are not authorized.");
   return next();
 });
 
 bot.start((ctx) => {
-  const welcomeMessage = `
-👋 Welcome to CFDROCKET Earning Bot!
-
-This bot is for demo/testing purposes only.
-You can:
-- Add/manage wallets
-- Simulate trades
-- Monitor demo deposits/withdrawals
-- Adjust simulation growth rate
-- Start / pause / stop simulations
-
-Commands:
-/addwallet - Add wallet
-/viewwallets - View wallets
-/startsimulation - Start simulation
-/pausesimulation - Pause simulation
-/stopsimulation - Stop simulation
-/setgrowth - Set demo growth rate
-/balance - View your balances (requires /settoken)
-/settoken <token> - Link your demo API token
-/trade_sim_start_with_token <token> - Start trading simulation
+  const menu = `
+Admin Bot - CFDROCKET
+Available commands:
+/viewusers - View all users
+/viewuser_phone <phone> - View user by phone
+/viewuser_name <name> - View user by name
+/viewuser_country <country> - View users by country
+/adduser - Add a new user
+/deleteuser <chatId> - Delete user
+/viewbalances - View all balances
+/topbalances <10|50|100> - View top N users by balance
 `;
-  ctx.reply(welcomeMessage);
-
-  const keyboard = {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: "Start Simulation ▶️", callback_data: "start" }],
-        [{ text: "Pause Simulation ⏸", callback_data: "pause" }],
-        [{ text: "Stop Simulation ⏹", callback_data: "stop" }],
-        [{ text: "Set Growth Rate 📈", callback_data: "growth" }],
-      ],
-    },
-  };
-  ctx.reply("Select an action:", keyboard);
+  ctx.reply(menu);
 });
 
-bot.command('settoken', async (ctx) => {
-  const parts = ctx.message.text.split(' ');
-  if (parts.length < 2) return ctx.reply('Usage: /settoken <jwt_token>');
-  const token = parts[1].trim();
-  ctx.session = ctx.session || {};
-  ctx.session.token = token;
-  ctx.reply('Token saved for this session. You can now use /balance and /trade_sim_start_with_token.');
+bot.command('viewusers', async (ctx) => {
+  const users = await User.find();
+  if (!users.length) return ctx.reply('No users found.');
+  let msg = '📋 All Users:\n';
+  users.forEach(u => msg += `ID: ${u.chatId} | ${u.name} | ${u.phone} | ${u.country} | Balance: ${u.balance}\n`);
+  ctx.reply(msg);
 });
 
-bot.command('balance', async (ctx) => {
-  const token = ctx.session?.token;
-  if (!token) return ctx.reply('Please set your token first: /settoken <token>');
-
-  try {
-    const res = await axios.get(`${API}/api/balance`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const balances = res.data;
-    if (!balances || balances.length === 0) return ctx.reply('No balances found.');
-    let msg = '💰 *Balances:*\n';
-    balances.forEach((b) => (msg += `${b.asset}: ${b.amount}\n`));
-    ctx.reply(msg, { parse_mode: 'Markdown' });
-  } catch (err) {
-    ctx.reply('Error fetching balances. Make sure token is valid and backend is reachable.');
-  }
+bot.command('viewuser_phone', async (ctx) => {
+  const phone = ctx.message.text.split(' ')[1];
+  if (!phone) return ctx.reply('Usage: /viewuser_phone <phone>');
+  const user = await User.findOne({ phone });
+  if (!user) return ctx.reply('User not found.');
+  ctx.reply(`ID: ${user.chatId} | ${user.name} | ${user.phone} | ${user.country} | Balance: ${user.balance}`);
 });
 
-bot.command('trade_sim_start', (ctx) => {
-  ctx.reply('To start simulation from Telegram: use /settoken then /trade_sim_start_with_token <token>');
+bot.command('viewuser_name', async (ctx) => {
+  const name = ctx.message.text.split(' ').slice(1).join(' ');
+  if (!name) return ctx.reply('Usage: /viewuser_name <name>');
+  const users = await User.find({ name: new RegExp(name, 'i') });
+  if (!users.length) return ctx.reply('No users found.');
+  let msg = 'Users:\n';
+  users.forEach(u => msg += `ID: ${u.chatId} | ${u.name} | ${u.phone} | ${u.country} | Balance: ${u.balance}\n`);
+  ctx.reply(msg);
 });
 
-bot.command('trade_sim_start_with_token', async (ctx) => {
-  const parts = ctx.message.text.split(' ');
-  if (parts.length < 2) return ctx.reply('Usage: /trade_sim_start_with_token <token>');
-  const token = parts[1].trim();
-
-  try {
-    const res = await axios.post(
-      `${API}/api/trade/start-sim`,
-      { asset: 'USDT', startAmount: 1000 },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    ctx.reply('✅ Simulation started: ' + JSON.stringify(res.data));
-  } catch (err) {
-    ctx.reply('❌ Error starting simulation: ' + (err.response?.data?.message || err.message));
-  }
+bot.command('viewuser_country', async (ctx) => {
+  const country = ctx.message.text.split(' ')[1];
+  if (!country) return ctx.reply('Usage: /viewuser_country <country>');
+  const users = await User.find({ country: new RegExp(country, 'i') });
+  if (!users.length) return ctx.reply('No users found.');
+  let msg = 'Users:\n';
+  users.forEach(u => msg += `ID: ${u.chatId} | ${u.name} | ${u.phone} | ${u.country} | Balance: ${u.balance}\n`);
+  ctx.reply(msg);
 });
 
-bot.command('addwallet', (ctx) => {
-  ctx.reply('Add wallet feature will call backend API here.');
-});
-
-bot.command('viewwallets', (ctx) => {
-  ctx.reply('View wallets feature will fetch wallets from backend API.');
-});
-
-bot.command('startsimulation', async (ctx) => {
-  const token = ctx.session?.token;
-  if (!token) return ctx.reply('Please set your token first: /settoken <token>');
-  try {
-    const res = await axios.post(`${API}/api/trade/start-sim`, { asset: 'USDT', startAmount: 1000 }, { headers: { Authorization: `Bearer ${token}` } });
-    ctx.reply('✅ Simulation started: ' + JSON.stringify(res.data));
-  } catch (err) {
-    ctx.reply('❌ Error: ' + (err.response?.data?.message || err.message));
-  }
-});
-
-bot.command('pausesimulation', async (ctx) => {
-  const token = ctx.session?.token;
-  if (!token) return ctx.reply('Please set your token first: /settoken <token>');
-  try {
-    const res = await axios.post(`${API}/api/trade/pause-sim`, {}, { headers: { Authorization: `Bearer ${token}` } });
-    ctx.reply('⏸ Simulation paused: ' + JSON.stringify(res.data));
-  } catch (err) {
-    ctx.reply('❌ Error: ' + (err.response?.data?.message || err.message));
-  }
-});
-
-bot.command('stopsimulation', async (ctx) => {
-  const token = ctx.session?.token;
-  if (!token) return ctx.reply('Please set your token first: /settoken <token>');
-  try {
-    const res = await axios.post(`${API}/api/trade/stop-sim`, {}, { headers: { Authorization: `Bearer ${token}` } });
-    ctx.reply('⏹ Simulation stopped: ' + JSON.stringify(res.data));
-  } catch (err) {
-    ctx.reply('❌ Error: ' + (err.response?.data?.message || err.message));
-  }
-});
-
-bot.command('setgrowth', async (ctx) => {
-  ctx.reply('📈 Please send the new growth rate (number).');
+bot.command('adduser', async (ctx) => {
+  ctx.reply('Send user info as: name,phone,city,country,age,balance');
   bot.on('text', async (ctx2) => {
-    const token = ctx2.session?.token;
-    if (!token) return ctx2.reply('Please set your token first: /settoken <token>');
-    const growthRate = parseFloat(ctx2.message.text);
-    if (isNaN(growthRate)) return ctx2.reply('❌ Invalid number, please try again.');
-    try {
-      const res = await axios.post(`${API}/api/trade/set-growth`, { growthRate }, { headers: { Authorization: `Bearer ${token}` } });
-      ctx2.reply(`✅ Growth rate set to ${growthRate}: ` + JSON.stringify(res.data));
-    } catch (err) {
-      ctx2.reply('❌ Error: ' + (err.response?.data?.message || err.message));
-    }
+    const parts = ctx2.message.text.split(',');
+    if (parts.length < 6) return ctx2.reply('Invalid format.');
+    const [name, phone, city, country, age, balance] = parts;
+    const user = new User({ chatId: Date.now().toString(), name, phone, city, country, age, balance: Number(balance) });
+    await user.save();
+    ctx2.reply(`✅ User added: ${name}`);
   });
 });
 
-bot.on('callback_query', async (ctx) => {
-  const data = ctx.callbackQuery.data;
-  const chatId = ctx.callbackQuery.message.chat.id;
-  const token = ctx.session?.token;
-  if (!token) return ctx.reply('Please set your token first using /settoken <token>');
-
-  try {
-    if (data === 'start') {
-      const res = await axios.post(`${API}/api/trade/start-sim`, { asset: 'USDT', startAmount: 1000 }, { headers: { Authorization: `Bearer ${token}` } });
-      ctx.reply('✅ Simulation started: ' + JSON.stringify(res.data));
-    }
-    if (data === 'pause') {
-      const res = await axios.post(`${API}/api/trade/pause-sim`, {}, { headers: { Authorization: `Bearer ${token}` } });
-      ctx.reply('⏸ Simulation paused: ' + JSON.stringify(res.data));
-    }
-    if (data === 'stop') {
-      const res = await axios.post(`${API}/api/trade/stop-sim`, {}, { headers: { Authorization: `Bearer ${token}` } });
-      ctx.reply('⏹ Simulation stopped: ' + JSON.stringify(res.data));
-    }
-    if (data === 'growth') {
-      ctx.reply('📈 Please send the new growth rate (number).');
-      bot.on('text', async (ctx2) => {
-        const growthRate = parseFloat(ctx2.message.text);
-        if (isNaN(growthRate)) return ctx2.reply('❌ Invalid number, please try again.');
-        try {
-          const res = await axios.post(`${API}/api/trade/set-growth`, { growthRate }, { headers: { Authorization: `Bearer ${token}` } });
-          ctx2.reply(`✅ Growth rate set to ${growthRate}: ` + JSON.stringify(res.data));
-        } catch (err) {
-          ctx2.reply('❌ Error: ' + (err.response?.data?.message || err.message));
-        }
-      });
-    }
-  } catch (err) {
-    ctx.reply('❌ Error performing action: ' + (err.response?.data?.message || err.message));
-  }
-
-  await ctx.answerCbQuery();
+bot.command('deleteuser', async (ctx) => {
+  const chatId = ctx.message.text.split(' ')[1];
+  if (!chatId) return ctx.reply('Usage: /deleteuser <chatId>');
+  await User.findOneAndDelete({ chatId });
+  ctx.reply(`✅ User ${chatId} deleted.`);
 });
 
-bot.launch().then(() => console.log('Telegram bot started'));
+bot.command('viewbalances', async (ctx) => {
+  const users = await User.find().sort({ balance: -1 });
+  if (!users.length) return ctx.reply('No users found.');
+  let msg = '💰 All Balances:\n';
+  users.forEach(u => msg += `${u.name} | ${u.balance}\n`);
+  ctx.reply(msg);
+});
+
+bot.command('topbalances', async (ctx) => {
+  const n = parseInt(ctx.message.text.split(' ')[1]);
+  if (!n || ![10,50,100].includes(n)) return ctx.reply('Usage: /topbalances <10|50|100>');
+  const users = await User.find().sort({ balance: -1 }).limit(n);
+  let msg = `💰 Top ${n} Users by Balance:\n`;
+  users.forEach(u => msg += `${u.name} | ${u.balance}\n`);
+  ctx.reply(msg);
+});
+
+bot.launch().then(() => console.log('Admin bot started'));
