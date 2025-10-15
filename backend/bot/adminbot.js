@@ -7,9 +7,12 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// Use Telegraf session to track state
-bot.use(session());
+// Initialize session
+bot.use(session({
+  defaultSession: () => ({}) // ensure ctx.session is always an object
+}));
 
+// MongoDB connection
 mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 
 const userSchema = new mongoose.Schema({
@@ -31,6 +34,7 @@ bot.use((ctx, next) => {
 
 // Show main menu
 function showMenu(ctx) {
+  ctx.session.awaitingDeleteChatId = false; // safely reset state
   const menu = `
 Admin Bot - CFDROCKET
 Available commands:
@@ -39,17 +43,20 @@ Available commands:
 /viewbalances - View all balances
 /cancel - Cancel current operation and return to menu
 `;
-  ctx.session.awaitingDeleteChatId = false; // reset any operation
   ctx.reply(menu);
 }
 
 // Start command
 bot.start((ctx) => {
+  if (!ctx.session) ctx.session = {};
   showMenu(ctx);
 });
 
 // Cancel command
 bot.command('cancel', (ctx) => {
+  if (!ctx.session) ctx.session = {};
+  ctx.session.awaitingDeleteChatId = false;
+  ctx.reply('✅ Operation cancelled.');
   showMenu(ctx);
 });
 
@@ -64,12 +71,15 @@ bot.command('viewusers', async (ctx) => {
 
 // Delete user command
 bot.command('deleteuser', (ctx) => {
+  if (!ctx.session) ctx.session = {};
   ctx.session.awaitingDeleteChatId = true;
   ctx.reply('Please send the Chat ID of the user you want to delete, or /cancel to abort.');
 });
 
-// Handle text messages
+// Handle text messages safely
 bot.on('text', async (ctx) => {
+  if (!ctx.session) ctx.session = {};
+  
   if (ctx.session.awaitingDeleteChatId) {
     const chatId = ctx.message.text.trim();
 
@@ -78,11 +88,15 @@ bot.on('text', async (ctx) => {
       return showMenu(ctx);
     }
 
-    const user = await User.findOneAndDelete({ chatId });
-    if (user) ctx.reply(`✅ User ${chatId} deleted successfully.`);
-    else ctx.reply('❌ Chat ID not found. Please try again.');
+    try {
+      const user = await User.findOneAndDelete({ chatId });
+      if (user) ctx.reply(`✅ User ${chatId} deleted successfully.`);
+      else ctx.reply('❌ Chat ID not found. Please try again.');
+    } catch (err) {
+      ctx.reply('❌ Error deleting user: ' + err.message);
+    }
 
-    ctx.session.awaitingDeleteChatId = false; // reset state
+    ctx.session.awaitingDeleteChatId = false;
     return showMenu(ctx);
   }
 });
