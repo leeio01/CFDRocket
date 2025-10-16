@@ -34,6 +34,7 @@ const userSchema = new mongoose.Schema({
       blockchain: String,
       address: String,
       txid: String,
+      note: String,
       date: { type: Date, default: Date.now },
     },
   ],
@@ -78,7 +79,6 @@ function askNextKYC(chatId) {
   const state = userKYCState[chatId];
   if (!state) return;
 
-  // All KYC done
   if (state.step >= kycQuestions.length) {
     User.findOneAndUpdate({ chatId }, state.answers, { new: true }).then((user) => {
       bot.sendMessage(chatId, `KYC Completed! Welcome, ${state.answers.name}.`);
@@ -119,19 +119,16 @@ bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
   let user = await User.findOne({ chatId });
 
-  // Delete user if exists but missing email
   if (user && !user.email) {
     await User.deleteOne({ chatId });
     user = null;
   }
 
   if (!user) {
-    // Ask for email first
-    userKYCState[chatId] = { step: -1 }; // step -1 = ask email
+    userKYCState[chatId] = { step: -1 };
     return bot.sendMessage(chatId, "Welcome! Please enter your email address (must be unique):");
   }
 
-  // Check KYC
   const missingFields = ["name", "phone", "city", "country", "age"].filter((f) => !user[f]);
   if (missingFields.length > 0) {
     userKYCState[chatId] = { step: 0, answers: {} };
@@ -156,11 +153,9 @@ bot.on("message", async (msg) => {
     const email = text.toLowerCase();
     if (!/^\S+@\S+\.\S+$/.test(email)) return bot.sendMessage(chatId, "Invalid email format. Enter a valid email:");
 
-    // Check if email already exists
     const existing = await User.findOne({ email });
     if (existing) return bot.sendMessage(chatId, "This email is already used. Enter a different email:");
 
-    // Create user with email
     const newUser = new User({ chatId, email });
     await newUser.save();
 
@@ -183,12 +178,13 @@ bot.on("message", async (msg) => {
   // ---------------- Deposit Handler ----------------
   if (userDepositState[chatId]) {
     const state = userDepositState[chatId];
-    let proof = msg.photo ? msg.photo[msg.photo.length - 1].file_id : text;
+    const proof = msg.photo ? msg.photo[msg.photo.length - 1].file_id : text;
     if (!proof) return bot.sendMessage(chatId, "Send screenshot or TXID as proof.");
     user.transactions.push({ type: "Deposit", amount: 0, status: "Pending", blockchain: state.coin, address: state.walletAddr, txid: proof });
     await user.save();
     delete userDepositState[chatId];
-    return bot.sendMessage(chatId, "Deposit proof received! Pending admin review.", showMainMenu(chatId));
+    showMainMenu(chatId);
+    return bot.sendMessage(chatId, "Deposit proof received! Pending admin review.");
   }
 
   // ---------------- Withdraw Handler ----------------
@@ -211,10 +207,12 @@ bot.on("message", async (msg) => {
         if (!["USDT-BEP", "USDT-ERC20", "BTC", "ETH", "SOL"].includes(chain)) return bot.sendMessage(chatId, "Invalid blockchain. Enter again:");
         state.blockchain = chain;
         user.transactions.push({ type: "Withdraw", amount: state.amount, status: "Pending", address: state.address, blockchain: state.blockchain });
-        user.balance -= state.amount; await user.save();
+        user.balance -= state.amount;
+        await user.save();
         delete userWithdrawState[chatId];
         bot.sendMessage(chatId, `Withdrawal requested!\nAmount:${state.amount}\nBlockchain:${state.blockchain}\nPending admin approval.`);
-        return showMainMenu(chatId);
+        showMainMenu(chatId);
+        return;
     }
   }
 
@@ -222,34 +220,45 @@ bot.on("message", async (msg) => {
   switch (text) {
     case "💰 Deposit Wallets":
       if (!user.wallets?.BTC) { user.wallets = { BTC: "btc_" + chatId, USDT_ERC20: "usdt_erc20_" + chatId }; await user.save(); }
-      return bot.sendMessage(chatId, "Select a deposit option:", { reply_markup: { inline_keyboard: [
-        [{ text: "💎 BTC", callback_data: "deposit_BTC" }],
-        [{ text: "💰 USDT-ERC20", callback_data: "deposit_USDT_ERC20" }],
-        [{ text: "⬅️ Back to Menu", callback_data: "back_main" }]
-      ]}});
+      return bot.sendMessage(chatId, "Select a deposit option:", {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "💎 BTC", callback_data: "deposit_BTC" }],
+            [{ text: "💰 USDT-ERC20", callback_data: "deposit_USDT_ERC20" }],
+            [{ text: "⬅️ Back to Menu", callback_data: "back_main" }]
+          ]
+        }
+      });
     case "📈 My Balance": return bot.sendMessage(chatId, `Balance: ${user.balance} USDT`);
     case "📜 Transactions":
       if (!user.transactions.length) return bot.sendMessage(chatId, "No transactions yet.");
-      let txReply = "Transactions:\n\n"; user.transactions.forEach(tx => { const s = tx.status === "Pending" ? "Pending" : tx.status === "Completed" ? "Completed" : tx.status; txReply += `${tx.type} - ${tx.amount} USDT - ${s} (${tx.date.toLocaleString()})\n`; });
+      let txReply = "Transactions:\n\n";
+      user.transactions.forEach(tx => {
+        const s = tx.status === "Pending" ? "Pending" : tx.status === "Completed" ? "Completed" : tx.status;
+        txReply += `${tx.type} - ${tx.amount} USDT - ${s} (${tx.date.toLocaleString()})\n`;
+      });
       return bot.sendMessage(chatId, txReply);
-    case "💸 Withdraw": userWithdrawState[chatId] = { step: 0 }; return bot.sendMessage(chatId, "Enter amount to withdraw:");
+    case "💸 Withdraw":
+      userWithdrawState[chatId] = { step: 0 };
+      return bot.sendMessage(chatId, "Enter amount to withdraw:");
     case "📊 Trades":
-  if (!user.transactions || user.transactions.length === 0) {
-    return bot.sendMessage(chatId, "No trades yet.");
+      if (!user.transactions || user.transactions.length === 0) return bot.sendMessage(chatId, "No trades yet.");
+      const tradeLogs = user.transactions
+        .filter(tx => tx.type === "P&L")
+        .map(tx => {
+          const profitLoss = tx.amount.toFixed(4);
+          const sign = profitLoss > 0 ? "+" : "";
+          return `${tx.date.toLocaleString()} | ${tx.note || "-"} | ${sign}${profitLoss} USDT`;
+        })
+        .slice(-20)
+        .join("\n");
+      return bot.sendMessage(chatId, `📊 Your Trade Logs (last 20):\n\n${tradeLogs}`);
+    case "📞 Support":
+      return bot.sendMessage(chatId, "Contact support: @cfdrocket_support");
+    default:
+      showMainMenu(chatId);
   }
-
-  // Filter only P&L trades
-  const tradeLogs = user.transactions
-    .filter(tx => tx.type === "P&L")
-    .map(tx => {
-      const profitLoss = tx.amount.toFixed(4);
-      const sign = profitLoss > 0 ? "+" : "";
-      return `${tx.date.toLocaleString()} | ${tx.note} | ${sign}${profitLoss} USDT`;
-    })
-    .slice(-20) // last 20 trades
-    .join("\n");
-
-  return bot.sendMessage(chatId, `📊 Your Trade Logs (last 20):\n\n${tradeLogs}`);
+});
 
 // ---------------- Callback Queries ----------------
 bot.on("callback_query", async (query) => {
@@ -262,10 +271,12 @@ bot.on("callback_query", async (query) => {
     const coin = data.split("_")[1];
     const walletAddr = user.wallets[coin] || `${coin.toLowerCase()}_${chatId}`;
     bot.sendMessage(chatId, `${coin} Deposit Address:\n${walletAddr}\nUpload proof (screenshot/TXID).`, {
-      reply_markup: { inline_keyboard: [
-        [{ text: "Copy Address", callback_data: "copy_" + walletAddr }],
-        [{ text: "Back to Menu", callback_data: "back_main" }]
-      ]}
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "Copy Address", callback_data: "copy_" + walletAddr }],
+          [{ text: "Back to Menu", callback_data: "back_main" }]
+        ]
+      }
     });
     userDepositState[chatId] = { coin, walletAddr };
     return;
